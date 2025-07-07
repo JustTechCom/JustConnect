@@ -1,13 +1,17 @@
-FROM node:18-alpine
-
+# Build aşaması
+FROM node:18-alpine AS builder
 WORKDIR /app
-
 COPY package*.json ./
-RUN npm ci --only=production
-
+RUN npm ci
 COPY . .
 RUN npm run build
 
-EXPOSE 5000
+# Production aşaması
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY --from=builder /app/dist ./dist
 
+EXPOSE 5000
 CMD ["npm", "start"]

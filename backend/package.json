@@ -5,12 +5,10 @@
   "main": "dist/app.js",
   "scripts": {
     "start": "node dist/app.js",
-    "dev": "nodemon src/app.ts",
     "build": "tsc",
+    "dev": "nodemon src/app.ts",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
-    "db:reset": "prisma db push --force-reset --accept-data-loss",
-    "db:studio": "prisma studio",
     "db:setup": "prisma db push --force-reset && prisma generate"
   },
   "dependencies": {
