@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "5000:5000"
+    environment:
+      - DATABASE_URL="postgresql://justadmin:0KJoeWqDaYo3DV4Tw36htNPa0yPRNu7Y@dpg-d1lq8jfdiees7380hrug-a.oregon-postgres.render.com:5432/justconnect"
+      - REDIS_URL=redis://red-d1j68qer433s73ftg780:6379
+      - JWT_SECRET=your-super-secret-jwt-key
+    depends_on:
+      - db
+      - redis
+
+  frontend:
+    build: ./frontend-web
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:5000/api
+      - REACT_APP_SOCKET_URL=http://localhost:5000
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=justconnect
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+volumes:
+  postgres_data:
