@@ -87,7 +87,7 @@ class EmailService {
     switch (provider) {
       case 'gmail':
         const accessToken = await this.oauth2Client.getAccessToken();
-        this.transporter = nodemailer.createTransporter({
+        this.transporter = nodemailer.createTransport({
           service: 'gmail',
           auth: {
             type: 'OAuth2',

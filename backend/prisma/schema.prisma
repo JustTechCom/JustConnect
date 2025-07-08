@@ -7,6 +7,7 @@ datasource db {
   url      = "postgresql://justadmin:0KJoeWqDaYo3DV4Tw36htNPa0yPRNu7Y@dpg-d1lq8jfdiees7380hrug-a/justconnect"
 }
 
+
 model User {
   id          String   @id @default(cuid())
   email       String   @unique
@@ -26,27 +27,29 @@ model User {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  sentMessages     Message[]      @relation("MessageSender")
+  sentMessages     Message[] @relation("MessageSender")
   chatMembers      ChatMember[]
-  createdChats     Chat[]         @relation("ChatCreator")
+  createdChats     Chat[]    @relation("ChatCreator")
   files            File[]
   subscriptions    Subscription[]
+  invoices         Invoice[]
 
   @@map("users")
 }
 
 model Chat {
-  id          String   @id @default(cuid())
-  name        String?
-  type        ChatType @default(DIRECT)
-  description String?
-  avatar      String?
-  isPrivate   Boolean  @default(false)
-  creatorId   String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String     @id @default(cuid())
+  name          String?
+  type          ChatType   @default(DIRECT)
+  avatar        String?
+  description   String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  createdBy     String
+  lastMessage   String?
+  lastMessageAt DateTime?
 
-  creator     User         @relation("ChatCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  creator     User         @relation("ChatCreator", fields: [createdBy], references: [id])
   members     ChatMember[]
   messages    Message[]
 
@@ -54,15 +57,14 @@ model Chat {
 }
 
 model ChatMember {
-  id        String   @id @default(cuid())
-  chatId    String
-  userId    String
-  role      MemberRole @default(MEMBER)
-  joinedAt  DateTime @default(now())
-  leftAt    DateTime?
+  id       String @id @default(cuid())
+  chatId   String
+  userId   String
+  role     MemberRole @default(MEMBER)
+  joinedAt DateTime   @default(now())
 
-  chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([chatId, userId])
   @@map("chat_members")
@@ -70,22 +72,23 @@ model ChatMember {
 
 model Message {
   id        String      @id @default(cuid())
-  content   String?
+  content   String
   type      MessageType @default(TEXT)
   chatId    String
   senderId  String
-  fileId    String?
-  replyToId String?
+  replyTo   String?
   edited    Boolean     @default(false)
-  editedAt  DateTime?
+  delivered Boolean     @default(false)
+  read      Boolean     @default(false)
+  fileId    String?
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
 
-  chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
-  sender    User     @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
-  file      File?    @relation(fields: [fileId], references: [id], onDelete: SetNull)
-  replyTo   Message? @relation("MessageReply", fields: [replyToId], references: [id], onDelete: SetNull)
-  replies   Message[] @relation("MessageReply")
+  chat     Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  sender   User     @relation("MessageSender", fields: [senderId], references: [id])
+  file     File?    @relation(fields: [fileId], references: [id])
+  replyToMessage Message? @relation("MessageReply", fields: [replyTo], references: [id])
+  replies        Message[] @relation("MessageReply")
 
   @@map("messages")
 }
@@ -103,7 +106,7 @@ model File {
   metadata    Json?
   createdAt   DateTime @default(now())
   
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages    Message[]
 
   @@map("files")
@@ -138,6 +141,8 @@ model Invoice {
   paidAt      DateTime?
   createdAt   DateTime @default(now())
 
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@map("invoices")
 }
 
@@ -166,16 +171,16 @@ enum ChatType {
 }
 
 enum MemberRole {
-  MEMBER
   ADMIN
   MODERATOR
+  MEMBER
 }
 
 enum MessageType {
   TEXT
   IMAGE
-  VIDEO
-  AUDIO
   FILE
-  SYSTEM
+  AUDIO
+  VIDEO
+  LOCATION
 }

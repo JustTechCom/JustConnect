@@ -80,16 +80,17 @@ export const validateFileUpload = (req: Request, res: Response, next: NextFuncti
     return next();
   }
 
-  const files = req.files;
-  const file = req.file || (Array.isArray(files) ? files[0] : files ? Object.values(files)[0] : null);
-  
-  if (!file) return next();
-
-  // Check file size (10MB max)
-  const maxSize = 10 * 1024 * 1024;
-  if (file.size > maxSize) {
-    return res.status(400).json({ error: 'File too large. Maximum size is 10MB.' });
+  let files: Express.Multer.File[] = [];
+  if (req.file) {
+    files = [req.file];
+  } else if (req.files) {
+    files = Array.isArray(req.files) ? req.files : Object.values(req.files).flat();
   }
+
+  for (const file of files) {
+    if (file.size > 10 * 1024 * 1024) {
+      return res.status(400).json({ error: 'File too large' });
+    }
 
   // Check file type
   const allowedTypes = [

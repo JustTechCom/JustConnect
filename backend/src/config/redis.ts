@@ -4,13 +4,13 @@ let redis: Redis;
 
 export const initializeRedis = () => {
   try {
-    redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-      retryDelayOnFailover: 100, // Remove this line - it doesn't exist
-      enableReadyCheck: true,
-      maxRetriesPerRequest: 3,
-      lazyConnect: true,
-      connectTimeout: 10000,
-    });
+   redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
+  enableReadyCheck: true,
+  maxRetriesPerRequest: 3,
+  lazyConnect: true,
+  connectTimeout: 10000,
+  // Remove retryDelayOnFailover - it doesn't exist
+});
 
     redis.on('connect', () => {
       console.log('🔴 Redis connected successfully');

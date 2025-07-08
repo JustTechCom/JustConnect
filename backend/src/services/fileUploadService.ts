@@ -1,5 +1,6 @@
 // backend/src/services/fileUploadService.ts
 import AWS from 'aws-sdk';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import multer from 'multer';
 import multerS3 from 'multer-s3';
 import sharp from 'sharp';
@@ -32,19 +33,17 @@ class FileUploadService {
   private s3: AWS.S3;
   private bucketName: string;
   private cloudFrontDomain?: string;
+  private s3Client: S3Client;
 
-  constructor() {
-    // Initialize AWS S3
-    AWS.config.update({
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-      region: process.env.AWS_REGION || 'us-east-1',
-    });
-
-    this.s3 = new AWS.S3();
-    this.bucketName = process.env.S3_BUCKET_NAME || 'justconnect-files';
-    this.cloudFrontDomain = process.env.CLOUDFRONT_DOMAIN;
-  }
+constructor() {
+  this.s3Client = new S3Client({
+    region: process.env.AWS_REGION || 'us-east-1',
+    credentials: {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
+    },
+  });
+}
 
   // Configure multer for file uploads
   getMulterConfig(userId: string) {

@@ -204,21 +204,17 @@ class PaymentService {
       // Create subscription
       const subscription = await this.stripe.subscriptions.create({
         customer: customer.id,
-        items: [
-          {
-            price_data: {
-              currency: plan.currency,
-              product_data: {
-                name: `JustConnect ${plan.name}`,
-                description: plan.features.join(', '),
-              },
-              unit_amount: Math.round(plan.price * 100),
-              recurring: {
-                interval: plan.interval,
-              },
-            },
-          },
-        ],
+       items: [{
+  price_data: {
+    currency: plan.currency,
+    product_data: { // This is correct
+      name: `JustConnect ${plan.name}`,
+      description: plan.features.join(', '),
+    },
+    unit_amount: Math.round(plan.price * 100),
+    recurring: { interval: plan.interval },
+  },
+}],
         payment_behavior: 'default_incomplete',
         payment_settings: { save_default_payment_method: 'on_subscription' },
         expand: ['latest_invoice.payment_intent'],
