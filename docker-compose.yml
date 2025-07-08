@@ -27,8 +27,8 @@ services:
     container_name: justconnect-backend
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=postgresql://justconnect:${DB_PASSWORD}@postgres:5432/justconnect_prod
-      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://justadmin:0KJoeWqDaYo3DV4Tw36htNPa0yPRNu7Y@dpg-d1lq8jfdiees7380hrug-a/justconnect
+      - REDIS_URL=redis://red-d1j68qer433s73ftg780:Nqj2RbWbKBylMPoSwaaucpL2FlhDzcnx@red-d1j68qer433s73ftg780:6379
       - JWT_SECRET=${JWT_SECRET}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
       - FRONTEND_URL=https://${DOMAIN_NAME}
@@ -60,9 +60,9 @@ services:
     image: postgres:15-alpine
     container_name: justconnect-postgres
     environment:
-      - POSTGRES_DB=justconnect_prod
+      - POSTGRES_DB=dpg-d1lq8jfdiees7380hrug-a
       - POSTGRES_USER=justconnect
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_PASSWORD=0KJoeWqDaYo3DV4Tw36htNPa0yPRNu7Y
       - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --locale=C
     volumes:
       - postgres_data:/var/lib/postgresql/data
