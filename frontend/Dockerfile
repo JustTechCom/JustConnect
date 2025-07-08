@@ -1,4 +1,4 @@
-# Frontend Dockerfile
+# Frontend Dockerfile for Render
 FROM node:18-alpine AS build
 
 WORKDIR /app
@@ -7,12 +7,12 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci --only=production && npm cache clean --force
+RUN npm install
 
 # Copy source code
 COPY . .
 
-# Build arguments
+# Build arguments for environment variables
 ARG REACT_APP_API_URL
 ARG REACT_APP_SOCKET_URL
 ARG REACT_APP_ENVIRONMENT=production
@@ -38,17 +38,17 @@ COPY nginx.conf /etc/nginx/nginx.conf
 # Copy built app
 COPY --from=build /app/build /usr/share/nginx/html
 
-# Add nginx user
-RUN addgroup -g 1001 -S nginx_group
-RUN adduser -S nginx_user -u 1001 -G nginx_group
+# Create nginx user
+RUN addgroup -g 1001 -S nginx_group && \
+    adduser -S nginx_user -u 1001 -G nginx_group
 
 # Set permissions
-RUN chown -R nginx_user:nginx_group /usr/share/nginx/html
-RUN chown -R nginx_user:nginx_group /var/cache/nginx
-RUN chown -R nginx_user:nginx_group /var/log/nginx
-RUN chown -R nginx_user:nginx_group /etc/nginx/conf.d
-RUN touch /var/run/nginx.pid
-RUN chown -R nginx_user:nginx_group /var/run/nginx.pid
+RUN chown -R nginx_user:nginx_group /usr/share/nginx/html && \
+    chown -R nginx_user:nginx_group /var/cache/nginx && \
+    chown -R nginx_user:nginx_group /var/log/nginx && \
+    chown -R nginx_user:nginx_group /etc/nginx/conf.d && \
+    touch /var/run/nginx.pid && \
+    chown -R nginx_user:nginx_group /var/run/nginx.pid
 
 USER nginx_user
 
