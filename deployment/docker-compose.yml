@@ -27,8 +27,8 @@ services:
     container_name: justconnect-backend
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=postgresql://justconnect:${DB_PASSWORD}@postgres:5432/justconnect_prod
-      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://justadmin:0KJoeWqDaYo3DV4Tw36htNPa0yPRNu7Y@dpg-d1lq8jfdiees7380hrug-a/justconnect
+      - REDIS_URL=redis://red-d1j68qer433s73ftg780:Nqj2RbWbKBylMPoSwaaucpL2FlhDzcnx@red-d1j68qer433s73ftg780:6379
       - JWT_SECRET=${JWT_SECRET}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
       - FRONTEND_URL=https://${DOMAIN_NAME}

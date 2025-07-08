@@ -71,14 +71,14 @@ jobs:
         npm run db:generate
         npm run db:push
       env:
-        DATABASE_URL: postgresql://postgres:test_password@localhost:5432/justconnect_test
+        DATABASE_URL: postgresql://justadmin:0KJoeWqDaYo3DV4Tw36htNPa0yPRNu7Y@dpg-d1lq8jfdiees7380hrug-a/justconnect
 
     - name: Run backend tests
       run: |
         cd backend
         npm test
       env:
-        DATABASE_URL: postgresql://postgres:test_password@localhost:5432/justconnect_test
+        DATABASE_URL: postgresql://justadmin:0KJoeWqDaYo3DV4Tw36htNPa0yPRNu7Y@dpg-d1lq8jfdiees7380hrug-a/justconnect
         REDIS_URL: redis://localhost:6379
         JWT_SECRET: test_secret
         NODE_ENV: test
