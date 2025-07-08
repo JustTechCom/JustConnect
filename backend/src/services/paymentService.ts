@@ -14,6 +14,7 @@ interface SubscriptionPlan {
   maxUsers?: number;
   maxStorage?: number; // in GB
   maxFileSize?: number; // in MB
+  stripePriceId?: string; // Add this for Stripe price IDs
 }
 
 interface PaymentResult {
@@ -65,6 +66,7 @@ class PaymentService {
         maxUsers: 10,
         maxStorage: 1,
         maxFileSize: 5,
+        stripePriceId: process.env.STRIPE_PRICE_BASIC || 'price_basic',
       },
       {
         id: 'premium',
@@ -84,6 +86,7 @@ class PaymentService {
         maxUsers: 100,
         maxStorage: 10,
         maxFileSize: 25,
+        stripePriceId: process.env.STRIPE_PRICE_PREMIUM || 'price_premium',
       },
       {
         id: 'business',
@@ -103,6 +106,7 @@ class PaymentService {
         ],
         maxStorage: 100,
         maxFileSize: 100,
+        stripePriceId: process.env.STRIPE_PRICE_BUSINESS || 'price_business',
       },
       {
         id: 'enterprise',
@@ -121,12 +125,22 @@ class PaymentService {
           'On-premise deployment option'
         ],
         maxFileSize: 500,
+        stripePriceId: process.env.STRIPE_PRICE_ENTERPRISE || 'price_enterprise',
       },
     ];
 
     plans.forEach(plan => {
       this.subscriptionPlans.set(plan.id, plan);
     });
+  }
+
+  // Get Stripe price ID for a plan
+  private getPriceId(planId: string): string {
+    const plan = this.subscriptionPlans.get(planId);
+    if (!plan || !plan.stripePriceId) {
+      throw new Error(`Price ID not found for plan: ${planId}`);
+    }
+    return plan.stripePriceId;
   }
 
   // Create payment intent
@@ -202,21 +216,21 @@ class PaymentService {
       });
 
       // Create subscription
-    const subscription = await this.stripe.subscriptions.create({
-  customer: customer.id,
-  items: [
-    {
-      price: this.getPriceId(planId), // Use pre-created price IDs
-    },
-  ],
-  payment_behavior: 'default_incomplete',
-  payment_settings: { save_default_payment_method: 'on_subscription' },
-  expand: ['latest_invoice.payment_intent'],
-  metadata: {
-    userId,
-    planId,
-  },
-});
+      const subscription = await this.stripe.subscriptions.create({
+        customer: customer.id,
+        items: [
+          {
+            price: this.getPriceId(planId), // Use pre-created price IDs
+          },
+        ],
+        payment_behavior: 'default_incomplete',
+        payment_settings: { save_default_payment_method: 'on_subscription' },
+        expand: ['latest_invoice.payment_intent'],
+        metadata: {
+          userId,
+          planId,
+        },
+      });
 
       // Save subscription to database
       await this.saveSubscriptionToDB(userId, planId, subscription);

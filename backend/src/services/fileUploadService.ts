@@ -60,7 +60,9 @@ class FileUploadService {
   }
 
   // Configure multer for file uploads
-  getMulterConfig(userId: string) {
+  async getMulterConfig(userId: string) {
+    const maxFileSize = await this.getMaxFileSize(userId);
+    
     const storage = multerS3({
       s3: this.s3,
       bucket: this.bucketName,
@@ -83,7 +85,7 @@ class FileUploadService {
     return multer({
       storage,
       limits: {
-        fileSize: this.getMaxFileSize(userId),
+        fileSize: maxFileSize,
         files: 10, // Max 10 files per request
       },
       fileFilter: this.fileFilter.bind(this),

@@ -1,19 +1,28 @@
-# Backend Dockerfile - Fixed Version
+# Backend Dockerfile - Updated Version
 FROM node:18-alpine AS build
 
 WORKDIR /app
 
-# Install OpenSSL to fix Prisma warning
-RUN apk add --no-cache openssl
+# Install system dependencies
+RUN apk add --no-cache \
+    openssl \
+    python3 \
+    make \
+    g++ \
+    && ln -sf python3 /usr/bin/python
 
-# Copy package files first
+# Copy package files first for better caching
 COPY package*.json ./
 
 # Copy Prisma schema before installing dependencies
 COPY prisma ./prisma/
 
 # Install dependencies
-RUN npm ci && npm cache clean --force
+RUN npm ci --only=production && npm cache clean --force
+
+# Install dev dependencies for build
+COPY package*.json ./
+RUN npm ci
 
 # Copy source code
 COPY . .
@@ -51,8 +60,8 @@ USER nodejs
 EXPOSE 5000
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node ./dist/healthcheck.js || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD node -e "const http = require('http'); http.get('http://localhost:5000/health', (res) => process.exit(res.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
 
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["node", "dist/app.js"]
