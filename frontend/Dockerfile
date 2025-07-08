@@ -14,7 +14,6 @@ COPY public/ ./public/
 COPY src/ ./src/
 COPY tailwind.config.js ./
 COPY postcss.config.js ./
-COPY tsconfig.json ./
 
 # Debug: Check what we have
 RUN echo "=== Directory structure ===" && \
