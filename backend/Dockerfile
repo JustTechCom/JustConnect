@@ -1,10 +1,15 @@
-# Backend Dockerfile
+# Backend Dockerfile - Fixed Version
 FROM node:18-alpine AS build
 
 WORKDIR /app
 
-# Copy package files
+# Install OpenSSL to fix Prisma warning
+RUN apk add --no-cache openssl
+
+# Copy package files first
 COPY package*.json ./
+
+# Copy Prisma schema before installing dependencies
 COPY prisma ./prisma/
 
 # Install dependencies
@@ -12,6 +17,10 @@ RUN npm ci && npm cache clean --force
 
 # Copy source code
 COPY . .
+
+# Verify Prisma schema exists and is valid
+RUN ls -la prisma/
+RUN cat prisma/schema.prisma
 
 # Generate Prisma client
 RUN npx prisma generate
@@ -24,8 +33,8 @@ FROM node:18-alpine AS production
 
 WORKDIR /app
 
-# Install dumb-init for proper signal handling
-RUN apk add --no-cache dumb-init
+# Install dumb-init and OpenSSL for proper signal handling and Prisma
+RUN apk add --no-cache dumb-init openssl
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs
@@ -43,7 +52,7 @@ EXPOSE 5000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node ./dist/healthcheck.js
+  CMD node ./dist/healthcheck.js || exit 1
 
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["node", "dist/app.js"]
