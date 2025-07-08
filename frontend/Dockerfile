@@ -1,4 +1,4 @@
-# Frontend Dockerfile for Render
+# Frontend Dockerfile for Render - Simplified
 FROM node:18-alpine AS build
 
 WORKDIR /app
@@ -29,28 +29,22 @@ RUN npm run build
 # Production stage with Nginx
 FROM nginx:alpine AS production
 
-# Install dumb-init
-RUN apk add --no-cache dumb-init
-
-# Copy custom nginx config
-COPY nginx.conf /etc/nginx/nginx.conf
-
 # Copy built app
 COPY --from=build /app/build /usr/share/nginx/html
 
-# Create nginx user
-RUN addgroup -g 1001 -S nginx_group && \
-    adduser -S nginx_user -u 1001 -G nginx_group
-
-# Set permissions
-RUN chown -R nginx_user:nginx_group /usr/share/nginx/html && \
-    chown -R nginx_user:nginx_group /var/cache/nginx && \
-    chown -R nginx_user:nginx_group /var/log/nginx && \
-    chown -R nginx_user:nginx_group /etc/nginx/conf.d && \
-    touch /var/run/nginx.pid && \
-    chown -R nginx_user:nginx_group /var/run/nginx.pid
-
-USER nginx_user
+# Create simple nginx config for React Router
+RUN echo 'server { \
+    listen 80; \
+    location / { \
+        root /usr/share/nginx/html; \
+        index index.html index.htm; \
+        try_files $uri $uri/ /index.html; \
+    } \
+    location /health { \
+        return 200 "healthy"; \
+        add_header Content-Type text/plain; \
+    } \
+}' > /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
 
@@ -58,5 +52,4 @@ EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1
 
-ENTRYPOINT ["dumb-init", "--"]
 CMD ["nginx", "-g", "daemon off;"]
