@@ -265,7 +265,7 @@ export const honeypot = (req: Request, res: Response, next: NextFunction) => {
 };
 
 // JWT Security enhancements
-xport const enhancedJWTValidation = (req: Request, res: Response, next: NextFunction) => {
+export const enhancedJWTValidation = (req: Request, res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(' ')[1];
 
