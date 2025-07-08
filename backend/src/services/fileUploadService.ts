@@ -1,6 +1,12 @@
 // backend/src/services/fileUploadService.ts
-import AWS from 'aws-sdk';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { 
+  S3Client, 
+  PutObjectCommand, 
+  GetObjectCommand, 
+  DeleteObjectCommand,
+  HeadObjectCommand 
+} from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import multer from 'multer';
 import multerS3 from 'multer-s3';
 import sharp from 'sharp';
@@ -18,7 +24,7 @@ interface FileUploadResult {
   size: number;
   mimeType: string;
   thumbnailUrl?: string;
-  duration?: number; // for video/audio files
+  duration?: number;
 }
 
 interface FileProcessingOptions {
@@ -29,22 +35,28 @@ interface FileProcessingOptions {
   quality?: number;
 }
 
+interface UploadToS3Result {
+  key: string;
+  location: string;
+  metadata: Record<string, string>;
+}
+
 class FileUploadService {
-  private s3: AWS.S3; // Fix: Proper initialization
+  private s3: S3Client;
   private bucketName: string;
   private cloudFrontDomain?: string;
 
   constructor() {
-    // Initialize AWS S3
-    AWS.config.update({
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    this.s3 = new S3Client({
       region: process.env.AWS_REGION || 'us-east-1',
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+      },
     });
 
-    this.s3 = new AWS.S3(); // Fix: Proper S3 initialization
-    this.bucketName = process.env.S3_BUCKET_NAME || 'justconnect-files';
-    this.cloudFrontDomain = process.env.CLOUDFRONT_DOMAIN;
+    this.bucketName = process.env.AWS_BUCKET_NAME!;
+    this.cloudFrontDomain = process.env.AWS_CLOUDFRONT_DOMAIN || undefined;
   }
 
   // Configure multer for file uploads
@@ -141,24 +153,24 @@ class FileUploadService {
       }
 
       // Save file metadata to database
-        const fileRecord = await prisma.file.create({
-    data: {
-      id: uuidv4(),
-      userId,
-      filename: file.originalname,
-      mimeType: file.mimetype,
-      size: file.size,
-      s3Key: uploadResult.key,
-      url: this.getFileUrl(uploadResult.key),
-      thumbnailUrl,
-      duration,
-      metadata: {
-        uploadDate: new Date(),
-        processedAt: new Date(),
-        chatId, // Store in metadata instead
-      },
-    },
-  });
+      const fileRecord = await prisma.file.create({
+        data: {
+          id: uuidv4(),
+          userId,
+          filename: file.originalname,
+          mimeType: file.mimetype,
+          size: file.size,
+          s3Key: uploadResult.key,
+          url: this.getFileUrl(uploadResult.key),
+          thumbnailUrl,
+          duration,
+          metadata: {
+            uploadDate: new Date(),
+            processedAt: new Date(),
+            chatId, // Store in metadata instead
+          },
+        },
+      });
 
       // Update user's storage usage
       await this.updateStorageUsage(userId, file.size);
@@ -188,13 +200,12 @@ class FileUploadService {
       throw new Error('File not found or access denied');
     }
 
-    const params = {
+    const command = new GetObjectCommand({
       Bucket: this.bucketName,
       Key: file.s3Key,
-      Expires: expiresIn,
-    };
+    });
 
-    return this.s3.getSignedUrl('getObject', params);
+    return await getSignedUrl(this.s3, command, { expiresIn });
   }
 
   // Delete file
@@ -209,18 +220,20 @@ class FileUploadService {
       }
 
       // Delete from S3
-      await this.s3.deleteObject({
+      const deleteCommand = new DeleteObjectCommand({
         Bucket: this.bucketName,
         Key: file.s3Key,
-      }).promise();
+      });
+      await this.s3.send(deleteCommand);
 
       // Delete thumbnail if exists
       if (file.thumbnailUrl) {
         const thumbnailKey = this.extractS3KeyFromUrl(file.thumbnailUrl);
-        await this.s3.deleteObject({
+        const deleteThumbnailCommand = new DeleteObjectCommand({
           Bucket: this.bucketName,
           Key: thumbnailKey,
-        }).promise();
+        });
+        await this.s3.send(deleteThumbnailCommand);
       }
 
       // Delete from database
@@ -307,12 +320,12 @@ class FileUploadService {
   }
 
   // Private helper methods
-  private async uploadToS3(userId: string, file: Express.Multer.File): Promise<any> {
+  private async uploadToS3(userId: string, file: Express.Multer.File): Promise<UploadToS3Result> {
     const fileExtension = path.extname(file.originalname);
     const fileName = `${uuidv4()}${fileExtension}`;
     const filePath = `users/${userId}/files/${fileName}`;
 
-    const params = {
+    const command = new PutObjectCommand({
       Bucket: this.bucketName,
       Key: filePath,
       Body: file.buffer,
@@ -322,13 +335,18 @@ class FileUploadService {
         originalName: file.originalname,
         uploadDate: new Date().toISOString(),
       },
-    };
+    });
 
-    const result = await this.s3.upload(params).promise();
+    await this.s3.send(command);
+    
     return {
       key: filePath,
-      location: result.Location,
-      metadata: params.Metadata,
+      location: this.getFileUrl(filePath),
+      metadata: {
+        userId,
+        originalName: file.originalname,
+        uploadDate: new Date().toISOString(),
+      },
     };
   }
 
@@ -371,13 +389,16 @@ class FileUploadService {
   private async compressImage(s3Key: string, options: FileProcessingOptions): Promise<void> {
     try {
       // Download image from S3
-      const object = await this.s3.getObject({
+      const getCommand = new GetObjectCommand({
         Bucket: this.bucketName,
         Key: s3Key,
-      }).promise();
+      });
+      
+      const response = await this.s3.send(getCommand);
+      const imageBuffer = await this.streamToBuffer(response.Body as NodeJS.ReadableStream);
 
       // Compress using Sharp
-      let sharpInstance = sharp(object.Body as Buffer);
+      let sharpInstance = sharp(imageBuffer);
 
       if (options.maxWidth || options.maxHeight) {
         sharpInstance = sharpInstance.resize(options.maxWidth, options.maxHeight, {
@@ -391,12 +412,14 @@ class FileUploadService {
         .toBuffer();
 
       // Upload compressed version back to S3
-      await this.s3.putObject({
+      const putCommand = new PutObjectCommand({
         Bucket: this.bucketName,
         Key: s3Key,
         Body: compressedBuffer,
         ContentType: 'image/jpeg',
-      }).promise();
+      });
+      
+      await this.s3.send(putCommand);
     } catch (error) {
       console.error('Image compression failed:', error);
     }
@@ -405,25 +428,30 @@ class FileUploadService {
   private async generateImageThumbnail(s3Key: string): Promise<string> {
     try {
       // Download original image
-      const object = await this.s3.getObject({
+      const getCommand = new GetObjectCommand({
         Bucket: this.bucketName,
         Key: s3Key,
-      }).promise();
+      });
+      
+      const response = await this.s3.send(getCommand);
+      const imageBuffer = await this.streamToBuffer(response.Body as NodeJS.ReadableStream);
 
       // Generate thumbnail
-      const thumbnailBuffer = await sharp(object.Body as Buffer)
+      const thumbnailBuffer = await sharp(imageBuffer)
         .resize(300, 300, { fit: 'inside', withoutEnlargement: true })
         .jpeg({ quality: 80 })
         .toBuffer();
 
       // Upload thumbnail
       const thumbnailKey = s3Key.replace(/(\.[^.]+)$/, '_thumb$1');
-      await this.s3.putObject({
+      const putCommand = new PutObjectCommand({
         Bucket: this.bucketName,
         Key: thumbnailKey,
         Body: thumbnailBuffer,
         ContentType: 'image/jpeg',
-      }).promise();
+      });
+      
+      await this.s3.send(putCommand);
 
       return this.getFileUrl(thumbnailKey);
     } catch (error) {
@@ -464,6 +492,17 @@ class FileUploadService {
       console.error('Audio duration extraction failed:', error);
       return 0;
     }
+  }
+
+  // Helper method to convert stream to buffer
+  private async streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
+    const chunks: Uint8Array[] = [];
+    
+    return new Promise((resolve, reject) => {
+      stream.on('data', (chunk) => chunks.push(chunk));
+      stream.on('error', reject);
+      stream.on('end', () => resolve(Buffer.concat(chunks)));
+    });
   }
 
   // Virus scanning integration

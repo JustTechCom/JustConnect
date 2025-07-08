@@ -179,7 +179,7 @@ export const validationRules = {
 
 // IP Whitelist/Blacklist
 export const ipFilter = (req: Request, res: Response, next: NextFunction) => {
-  const clientIP = req.ip;
+ const clientIP = req.ip ?? '';
 
   // Blacklisted IPs (could be stored in database/redis)
   const blacklistedIPs = process.env.BLACKLISTED_IPS?.split(',') || [];

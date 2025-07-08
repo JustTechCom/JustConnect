@@ -626,7 +626,10 @@ async function checkDatabaseHealth() {
     await prisma.user.count();
     return { status: 'healthy', responseTime: Date.now() };
   } catch (error) {
+     if (error instanceof Error) {
     return { status: 'unhealthy', error: error.message };
+  }
+  return { status: 'unhealthy', error: String(error) }; // fallback
   }
 }
 
@@ -636,7 +639,10 @@ async function checkRedisHealth() {
     await redis.ping();
     return { status: 'healthy', responseTime: Date.now() - start };
   } catch (error) {
+      if (error instanceof Error) {
     return { status: 'unhealthy', error: error.message };
+  }
+  return { status: 'unhealthy', error: String(error) }; // fallback
   }
 }
 

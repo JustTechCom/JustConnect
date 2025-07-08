@@ -195,8 +195,13 @@ class EmailService {
         },
       };
 
-      const result = await this.transporter.sendMail(mailOptions);
-      console.log('📧 Email sent successfully:', result.messageId);
+      let result;
+if (this.transporter) {
+  result = await this.transporter.sendMail(mailOptions);
+} else {
+  throw new Error("Transporter is not initialized.");
+}
+console.log('📧 Email sent successfully:', result.messageId);
       return true;
     } catch (error) {
       console.error('❌ Failed to send email:', error);
@@ -298,7 +303,11 @@ class EmailService {
 
   async verifyConnection(): Promise<boolean> {
     try {
-      await this.transporter.verify();
+      if (this.transporter) {
+  await this.transporter.verify();
+} else {
+  throw new Error('Transporter is not initialized.');
+}
       return true;
     } catch (error) {
       console.error('Email service verification failed:', error);
