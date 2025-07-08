@@ -7,7 +7,6 @@ datasource db {
   url      = "postgresql://justadmin:0KJoeWqDaYo3DV4Tw36htNPa0yPRNu7Y@dpg-d1lq8jfdiees7380hrug-a/justconnect"
 }
 
-
 model User {
   id          String   @id @default(cuid())
   email       String   @unique
@@ -27,13 +26,68 @@ model User {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  sentMessages     Message[] @relation("MessageSender")
+  sentMessages     Message[]      @relation("MessageSender")
   chatMembers      ChatMember[]
-  createdChats     Chat[]    @relation("ChatCreator")
+  createdChats     Chat[]         @relation("ChatCreator")
   files            File[]
   subscriptions    Subscription[]
 
   @@map("users")
+}
+
+model Chat {
+  id          String   @id @default(cuid())
+  name        String?
+  type        ChatType @default(DIRECT)
+  description String?
+  avatar      String?
+  isPrivate   Boolean  @default(false)
+  creatorId   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  creator     User         @relation("ChatCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  members     ChatMember[]
+  messages    Message[]
+
+  @@map("chats")
+}
+
+model ChatMember {
+  id        String   @id @default(cuid())
+  chatId    String
+  userId    String
+  role      MemberRole @default(MEMBER)
+  joinedAt  DateTime @default(now())
+  leftAt    DateTime?
+
+  chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([chatId, userId])
+  @@map("chat_members")
+}
+
+model Message {
+  id        String      @id @default(cuid())
+  content   String?
+  type      MessageType @default(TEXT)
+  chatId    String
+  senderId  String
+  fileId    String?
+  replyToId String?
+  edited    Boolean     @default(false)
+  editedAt  DateTime?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  sender    User     @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  file      File?    @relation(fields: [fileId], references: [id], onDelete: SetNull)
+  replyTo   Message? @relation("MessageReply", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies   Message[] @relation("MessageReply")
+
+  @@map("messages")
 }
 
 model File {
@@ -103,4 +157,25 @@ enum Role {
   USER
   ADMIN
   MODERATOR
+}
+
+enum ChatType {
+  DIRECT
+  GROUP
+  CHANNEL
+}
+
+enum MemberRole {
+  MEMBER
+  ADMIN
+  MODERATOR
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  VIDEO
+  AUDIO
+  FILE
+  SYSTEM
 }
