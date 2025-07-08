@@ -6,7 +6,7 @@ interface UserAnalytics {
   userId: string;
   event: string;
   properties?: Record<string, any>;
-  timestamp: Date;
+  timestamp?: Date; // Make optional or provide default
   sessionId?: string;
   ip?: string;
   userAgent?: string;
@@ -51,19 +51,17 @@ class AnalyticsService {
 
   // Track user registration
   async trackUserRegistration(userId: string, source: string, ip?: string): Promise<void> {
-    await this.trackEvent({
-      userId,
-      event: 'user_registered',
-      properties: {
-        source,
-        registrationDate: new Date(),
-      },
-      ip,
-    });
-
-    // Update daily metrics
-    await this.updateDailyMetric('new_users', 1);
-  }
+  await this.trackEvent({
+    userId,
+    event: 'user_registered',
+    timestamp: new Date(), // Add this
+    properties: {
+      source,
+      registrationDate: new Date(),
+    },
+    ip,
+  });
+}
 
   // Track user login
   async trackUserLogin(userId: string, ip?: string, userAgent?: string): Promise<void> {

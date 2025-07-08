@@ -1,12 +1,3 @@
-generator client {
-  provider = "prisma-client-js"
-}
-
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
-
 model User {
   id          String   @id @default(cuid())
   email       String   @unique
@@ -19,87 +10,87 @@ model User {
   lastSeen    DateTime @default(now())
   password    String
   verified    Boolean  @default(false)
+  role        Role     @default(USER)
+  banned      Boolean  @default(false)
+  banReason   String?
+  banExpiresAt DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   sentMessages     Message[] @relation("MessageSender")
   chatMembers      ChatMember[]
   createdChats     Chat[]    @relation("ChatCreator")
+  files            File[]
+  subscriptions    Subscription[]
 
   @@map("users")
 }
 
-model Chat {
-  id          String     @id @default(cuid())
-  name        String?
-  type        ChatType   @default(DIRECT)
-  avatar      String?
-  description String?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  createdBy   String
-  lastMessage String?
-  lastMessageAt DateTime?
-
-  creator     User         @relation("ChatCreator", fields: [createdBy], references: [id])
-  members     ChatMember[]
+model File {
+  id          String   @id @default(cuid())
+  userId      String
+  filename    String
+  mimeType    String
+  size        Int
+  s3Key       String
+  url         String
+  thumbnailUrl String?
+  duration    Int?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages    Message[]
 
-  @@map("chats")
+  @@map("files")
 }
 
-model ChatMember {
-  id       String @id @default(cuid())
-  chatId   String
-  userId   String
-  role     MemberRole @default(MEMBER)
-  joinedAt DateTime   @default(now())
+model Subscription {
+  id                   String   @id @default(cuid())
+  userId               String
+  planId               String
+  stripeSubscriptionId String   @unique
+  stripeCustomerId     String
+  status               String
+  currentPeriodStart   DateTime
+  currentPeriodEnd     DateTime
+  cancelledAt          DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
-  chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([chatId, userId])
-  @@map("chat_members")
+  @@map("subscriptions")
 }
 
-model Message {
-  id        String      @id @default(cuid())
-  content   String
-  type      MessageType @default(TEXT)
-  chatId    String
-  senderId  String
-  replyTo   String?
-  edited    Boolean     @default(false)
-  delivered Boolean     @default(false)
-  read      Boolean     @default(false)
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+model Invoice {
+  id          String   @id @default(cuid())
+  userId      String
+  amount      Float
+  currency    String
+  description String
+  status      String
+  dueDate     DateTime
+  paidAt      DateTime?
+  createdAt   DateTime @default(now())
 
-  chat     Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
-  sender   User     @relation("MessageSender", fields: [senderId], references: [id])
-  replyToMessage Message? @relation("MessageReply", fields: [replyTo], references: [id])
-  replies        Message[] @relation("MessageReply")
-
-  @@map("messages")
+  @@map("invoices")
 }
 
-enum ChatType {
-  DIRECT
-  GROUP
-  CHANNEL
+model Broadcast {
+  id        String   @id @default(cuid())
+  title     String
+  message   String
+  type      String
+  sentBy    String
+  sentAt    DateTime
+  createdAt DateTime @default(now())
+
+  @@map("broadcasts")
 }
 
-enum MemberRole {
+enum Role {
+  USER
   ADMIN
   MODERATOR
-  MEMBER
-}
-
-enum MessageType {
-  TEXT
-  IMAGE
-  FILE
-  AUDIO
-  VIDEO
-  LOCATION
 }

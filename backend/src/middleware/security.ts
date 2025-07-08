@@ -14,9 +14,8 @@ export const createRateLimit = (windowMs: number, max: number, message?: string)
     standardHeaders: true,
     legacyHeaders: false,
     keyGenerator: (req: Request) => {
-      // Use IP + User ID for authenticated requests
       const userId = (req as any).user?.id;
-      return userId ? `${req.ip}-${userId}` : req.ip;
+      return userId ? `${req.ip}-${userId}` : req.ip || 'unknown';
     },
     handler: (req: Request, res: Response) => {
       res.status(429).json({
@@ -81,7 +80,9 @@ export const validateFileUpload = (req: Request, res: Response, next: NextFuncti
     return next();
   }
 
-  const file = req.file || (Array.isArray(req.files) ? req.files[0] : req.files);
+  const files = req.files;
+  const file = req.file || (Array.isArray(files) ? files[0] : files ? Object.values(files)[0] : null);
+  
   if (!file) return next();
 
   // Check file size (10MB max)
