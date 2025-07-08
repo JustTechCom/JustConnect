@@ -92,32 +92,33 @@ export const validateFileUpload = (req: Request, res: Response, next: NextFuncti
       return res.status(400).json({ error: 'File too large' });
     }
 
-  // Check file type
-  const allowedTypes = [
-    'image/jpeg', 'image/png', 'image/gif', 'image/webp',
-    'video/mp4', 'video/webm', 'video/quicktime',
-    'audio/mpeg', 'audio/wav', 'audio/ogg',
-    'application/pdf', 'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'text/plain', 'application/zip'
-  ];
+    // Check file type
+    const allowedTypes = [
+      'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+      'video/mp4', 'video/webm', 'video/quicktime',
+      'audio/mpeg', 'audio/wav', 'audio/ogg',
+      'application/pdf', 'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'text/plain', 'application/zip'
+    ];
 
-  if (!allowedTypes.includes(file.mimetype)) {
-    return res.status(400).json({ error: 'File type not allowed.' });
-  }
+    if (!allowedTypes.includes(file.mimetype)) {
+      return res.status(400).json({ error: 'File type not allowed.' });
+    }
 
-  // Virus scanning (integrate with ClamAV or similar)
-  // For now, just check for suspicious file signatures
-  const suspiciousSignatures = [
-    Buffer.from('4D5A', 'hex'), // PE executable
-    Buffer.from('7F454C46', 'hex'), // ELF executable
-    Buffer.from('213C617263683E', 'hex'), // Archive
-  ];
+    // Virus scanning (integrate with ClamAV or similar)
+    // For now, just check for suspicious file signatures
+    const suspiciousSignatures = [
+      Buffer.from('4D5A', 'hex'), // PE executable
+      Buffer.from('7F454C46', 'hex'), // ELF executable
+      Buffer.from('213C617263683E', 'hex'), // Archive
+    ];
 
-  const fileBuffer = file.buffer || Buffer.from(file.path);
-  for (const signature of suspiciousSignatures) {
-    if (fileBuffer.indexOf(signature) === 0) {
-      return res.status(400).json({ error: 'Suspicious file detected.' });
+    const fileBuffer = file.buffer || Buffer.from(file.path);
+    for (const signature of suspiciousSignatures) {
+      if (fileBuffer.indexOf(signature) === 0) {
+        return res.status(400).json({ error: 'Suspicious file detected.' });
+      }
     }
   }
 
@@ -147,29 +148,29 @@ export const validationRules = {
     .isEmail()
     .normalizeEmail()
     .withMessage('Please provide a valid email'),
-  
+
   password: body('password')
     .isLength({ min: 8 })
     .withMessage('Password must be at least 8 characters')
     .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
     .withMessage('Password must contain uppercase, lowercase, number and special character'),
-  
+
   username: body('username')
     .isLength({ min: 3, max: 20 })
     .withMessage('Username must be 3-20 characters')
     .matches(/^[a-zA-Z0-9_]+$/)
     .withMessage('Username can only contain letters, numbers and underscores'),
-  
+
   name: body(['firstName', 'lastName'])
     .isLength({ min: 1, max: 50 })
     .withMessage('Name must be 1-50 characters')
     .matches(/^[a-zA-ZÀ-ÿ\s]+$/)
     .withMessage('Name can only contain letters and spaces'),
-  
+
   chatId: body('chatId')
     .isUUID()
     .withMessage('Invalid chat ID'),
-  
+
   messageContent: body('content')
     .isLength({ min: 1, max: 4000 })
     .withMessage('Message must be 1-4000 characters')
@@ -179,10 +180,10 @@ export const validationRules = {
 // IP Whitelist/Blacklist
 export const ipFilter = (req: Request, res: Response, next: NextFunction) => {
   const clientIP = req.ip;
-  
+
   // Blacklisted IPs (could be stored in database/redis)
   const blacklistedIPs = process.env.BLACKLISTED_IPS?.split(',') || [];
-  
+
   if (blacklistedIPs.includes(clientIP)) {
     return res.status(403).json({ error: 'Access denied' });
   }
@@ -217,7 +218,7 @@ export const validateApiKey = (req: Request, res: Response, next: NextFunction) 
 // Request logging for security monitoring
 export const securityLogger = (req: Request, res: Response, next: NextFunction) => {
   const startTime = Date.now();
-  
+
   res.on('finish', () => {
     const duration = Date.now() - startTime;
     const logData = {
@@ -245,7 +246,7 @@ export const securityLogger = (req: Request, res: Response, next: NextFunction) 
 // Honeypot endpoints to catch bots
 export const honeypot = (req: Request, res: Response, next: NextFunction) => {
   const honeypotPaths = ['/admin.php', '/wp-admin', '/.env', '/config.php'];
-  
+
   if (honeypotPaths.some(path => req.path.includes(path))) {
     console.warn('Honeypot triggered:', {
       ip: req.ip,
@@ -253,10 +254,10 @@ export const honeypot = (req: Request, res: Response, next: NextFunction) => {
       userAgent: req.get('User-Agent'),
       timestamp: new Date().toISOString(),
     });
-    
+
     // Add IP to temporary blacklist
     // Could integrate with fail2ban or similar
-    
+
     return res.status(404).end();
   }
 
@@ -274,7 +275,7 @@ export const enhancedJWTValidation = (req: Request, res: Response, next: NextFun
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
-    
+
     // Check token expiration with grace period
     const now = Math.floor(Date.now() / 1000);
     if (decoded.exp && now > decoded.exp + 60) { // 1 minute grace period
@@ -283,7 +284,7 @@ export const enhancedJWTValidation = (req: Request, res: Response, next: NextFun
 
     // Check if token is in blacklist (for logout functionality)
     // This would typically check Redis or database
-    
+
     (req as any).user = decoded;
     next();
   } catch (error) {
