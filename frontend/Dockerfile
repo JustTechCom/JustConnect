@@ -1,4 +1,4 @@
-# Frontend Dockerfile - Debug Version
+# Frontend Dockerfile - Module Resolution Fix
 FROM node:18-alpine AS build
 
 WORKDIR /app
@@ -17,37 +17,36 @@ COPY src/ ./src/
 COPY tailwind.config.j[s] ./
 COPY postcss.config.j[s] ./
 
-# CRITICAL DEBUG: Check structure BEFORE build
-RUN echo "=== DEBUGGING BEFORE BUILD ===" && \
-    echo "--- Root directory ---" && \
-    ls -la && \
-    echo "--- Source directory ---" && \
-    ls -la src/ && \
-    echo "--- Public directory ---" && \
-    ls -la public/ && \
-    echo "--- Find ALL files named App ---" && \
-    find . -name "*[Aa]pp*" -type f && \
-    echo "--- Check index.tsx imports ---" && \
+# Fix import issue in index.tsx
+RUN echo "=== FIXING MODULE IMPORTS ===" && \
+    echo "Original index.tsx:" && \
     cat src/index.tsx && \
-    echo "--- Check if App.tsx exists ---" && \
-    test -f src/App.tsx && echo "App.tsx EXISTS" || echo "App.tsx MISSING" && \
-    echo "--- File permissions ---" && \
-    ls -la src/App.tsx 2>/dev/null || echo "Cannot access App.tsx"
+    echo "--- Fixing import ---" && \
+    sed -i "s|import App from './App'|import App from './App.tsx'|g" src/index.tsx && \
+    echo "Fixed index.tsx:" && \
+    cat src/index.tsx
 
-# If App.tsx is missing, create a simple one
-RUN if [ ! -f src/App.tsx ]; then \
-    echo "Creating missing App.tsx..." && \
-    echo "import React from 'react';" > src/App.tsx && \
-    echo "function App() {" >> src/App.tsx && \
-    echo "  return (" >> src/App.tsx && \
-    echo "    <div className=\"App\">" >> src/App.tsx && \
-    echo "      <h1>JustConnect</h1>" >> src/App.tsx && \
-    echo "      <p>Mesajlaşma Uygulaması</p>" >> src/App.tsx && \
-    echo "    </div>" >> src/App.tsx && \
-    echo "  );" >> src/App.tsx && \
-    echo "}" >> src/App.tsx && \
-    echo "export default App;" >> src/App.tsx; \
-    fi
+# Create tsconfig.json for proper module resolution
+RUN echo '{ \
+  "compilerOptions": { \
+    "target": "es5", \
+    "lib": ["dom", "dom.iterable", "es6"], \
+    "allowJs": true, \
+    "skipLibCheck": true, \
+    "esModuleInterop": true, \
+    "allowSyntheticDefaultImports": true, \
+    "strict": false, \
+    "forceConsistentCasingInFileNames": false, \
+    "noFallthroughCasesInSwitch": true, \
+    "module": "esnext", \
+    "moduleResolution": "node", \
+    "resolveJsonModule": true, \
+    "isolatedModules": true, \
+    "noEmit": true, \
+    "jsx": "react-jsx" \
+  }, \
+  "include": ["src"] \
+}' > tsconfig.json
 
 # Build arguments
 ARG REACT_APP_API_URL=http://localhost:5000/api
@@ -60,11 +59,15 @@ ENV REACT_APP_SOCKET_URL=$REACT_APP_SOCKET_URL
 ENV REACT_APP_ENVIRONMENT=$REACT_APP_ENVIRONMENT
 ENV GENERATE_SOURCEMAP=false
 ENV CI=false
+ENV SKIP_PREFLIGHT_CHECK=true
 
-# Final check before build
-RUN echo "=== FINAL CHECK BEFORE BUILD ===" && \
+# Final debug
+RUN echo "=== FINAL CHECK ===" && \
     ls -la src/ && \
-    cat src/App.tsx
+    echo "--- tsconfig.json ---" && \
+    cat tsconfig.json && \
+    echo "--- index.tsx imports ---" && \
+    head -10 src/index.tsx
 
 # Build the application
 RUN npm run build
