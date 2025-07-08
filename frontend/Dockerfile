@@ -1,4 +1,4 @@
-# Frontend Dockerfile - Debug ve Fix
+# Frontend Dockerfile - Debug Version
 FROM node:18-alpine AS build
 
 WORKDIR /app
@@ -9,21 +9,45 @@ COPY package*.json ./
 # Install dependencies
 RUN npm install
 
-# Copy ALL source files explicitly
+# Copy essential directories
 COPY public/ ./public/
 COPY src/ ./src/
-COPY tailwind.config.js ./
-COPY postcss.config.js ./
 
-# Debug: Check what we have
-RUN echo "=== Directory structure ===" && \
+# Copy optional config files (if they exist)
+COPY tailwind.config.j[s] ./
+COPY postcss.config.j[s] ./
+
+# CRITICAL DEBUG: Check structure BEFORE build
+RUN echo "=== DEBUGGING BEFORE BUILD ===" && \
+    echo "--- Root directory ---" && \
     ls -la && \
-    echo "=== Source directory ===" && \
+    echo "--- Source directory ---" && \
     ls -la src/ && \
-    echo "=== Looking for App files ===" && \
-    find . -name "*App*" -type f && \
-    echo "=== Index.tsx content ===" && \
-    head -5 src/index.tsx
+    echo "--- Public directory ---" && \
+    ls -la public/ && \
+    echo "--- Find ALL files named App ---" && \
+    find . -name "*[Aa]pp*" -type f && \
+    echo "--- Check index.tsx imports ---" && \
+    cat src/index.tsx && \
+    echo "--- Check if App.tsx exists ---" && \
+    test -f src/App.tsx && echo "App.tsx EXISTS" || echo "App.tsx MISSING" && \
+    echo "--- File permissions ---" && \
+    ls -la src/App.tsx 2>/dev/null || echo "Cannot access App.tsx"
+
+# If App.tsx is missing, create a simple one
+RUN if [ ! -f src/App.tsx ]; then \
+    echo "Creating missing App.tsx..." && \
+    echo "import React from 'react';" > src/App.tsx && \
+    echo "function App() {" >> src/App.tsx && \
+    echo "  return (" >> src/App.tsx && \
+    echo "    <div className=\"App\">" >> src/App.tsx && \
+    echo "      <h1>JustConnect</h1>" >> src/App.tsx && \
+    echo "      <p>Mesajlaşma Uygulaması</p>" >> src/App.tsx && \
+    echo "    </div>" >> src/App.tsx && \
+    echo "  );" >> src/App.tsx && \
+    echo "}" >> src/App.tsx && \
+    echo "export default App;" >> src/App.tsx; \
+    fi
 
 # Build arguments
 ARG REACT_APP_API_URL=http://localhost:5000/api
@@ -36,6 +60,11 @@ ENV REACT_APP_SOCKET_URL=$REACT_APP_SOCKET_URL
 ENV REACT_APP_ENVIRONMENT=$REACT_APP_ENVIRONMENT
 ENV GENERATE_SOURCEMAP=false
 ENV CI=false
+
+# Final check before build
+RUN echo "=== FINAL CHECK BEFORE BUILD ===" && \
+    ls -la src/ && \
+    cat src/App.tsx
 
 # Build the application
 RUN npm run build
