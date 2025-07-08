@@ -12,8 +12,8 @@ COPY package*.json ./
 # Copy Prisma schema before installing dependencies
 COPY prisma ./prisma/
 
-# Install dependencies
-RUN npm ci && npm cache clean --force
+# Install dependencies using npm install instead of npm ci
+RUN npm install && npm cache clean --force
 
 # Copy source code
 COPY . .
