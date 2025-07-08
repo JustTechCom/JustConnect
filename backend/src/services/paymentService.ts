@@ -202,27 +202,21 @@ class PaymentService {
       });
 
       // Create subscription
-      const subscription = await this.stripe.subscriptions.create({
-        customer: customer.id,
-       items: [{
-  price_data: {
-    currency: plan.currency,
-    product_data: { // This is correct
-      name: `JustConnect ${plan.name}`,
-      description: plan.features.join(', '),
+    const subscription = await this.stripe.subscriptions.create({
+  customer: customer.id,
+  items: [
+    {
+      price: this.getPriceId(planId), // Use pre-created price IDs
     },
-    unit_amount: Math.round(plan.price * 100),
-    recurring: { interval: plan.interval },
+  ],
+  payment_behavior: 'default_incomplete',
+  payment_settings: { save_default_payment_method: 'on_subscription' },
+  expand: ['latest_invoice.payment_intent'],
+  metadata: {
+    userId,
+    planId,
   },
-}],
-        payment_behavior: 'default_incomplete',
-        payment_settings: { save_default_payment_method: 'on_subscription' },
-        expand: ['latest_invoice.payment_intent'],
-        metadata: {
-          userId,
-          planId,
-        },
-      });
+});
 
       // Save subscription to database
       await this.saveSubscriptionToDB(userId, planId, subscription);

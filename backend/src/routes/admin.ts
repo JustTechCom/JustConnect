@@ -510,14 +510,17 @@ router.post('/broadcast', [
     }
 
     const { title, message, type, sendEmail } = req.body;
-
+const userId = req.user?.id;
+if (!userId) {
+  return res.status(401).json({ error: 'User not authenticated' });
+}
     // Save broadcast to database
     const broadcast = await prisma.broadcast.create({
       data: {
         title,
         message,
         type,
-        sentBy: req.user.id,
+        sentBy: userId,
         sentAt: new Date(),
       },
     });
@@ -579,13 +582,10 @@ router.get('/health', async (req: Request, res: Response) => {
 
     res.json(health);
   } catch (error) {
-    console.error('Health check error:', error);
-    res.status(500).json({ 
-      status: 'unhealthy',
-      error: error.message,
-      timestamp: new Date(),
-    });
-  }
+  console.error('Error:', error);
+  const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+  res.status(500).json({ error: errorMessage });
+}
 });
 
 // Helper functions

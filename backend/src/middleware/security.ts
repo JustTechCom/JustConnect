@@ -265,7 +265,7 @@ export const honeypot = (req: Request, res: Response, next: NextFunction) => {
 };
 
 // JWT Security enhancements
-export const enhancedJWTValidation = (req: Request, res: Response, next: NextFunction) => {
+xport const enhancedJWTValidation = (req: Request, res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -274,16 +274,18 @@ export const enhancedJWTValidation = (req: Request, res: Response, next: NextFun
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      return res.status(500).json({ error: 'JWT configuration error' });
+    }
 
+    const decoded = jwt.verify(token, jwtSecret) as any;
+    
     // Check token expiration with grace period
     const now = Math.floor(Date.now() / 1000);
     if (decoded.exp && now > decoded.exp + 60) { // 1 minute grace period
       return res.status(401).json({ error: 'Token expired' });
     }
-
-    // Check if token is in blacklist (for logout functionality)
-    // This would typically check Redis or database
 
     (req as any).user = decoded;
     next();

@@ -30,20 +30,22 @@ interface FileProcessingOptions {
 }
 
 class FileUploadService {
-  private s3: AWS.S3;
+  private s3: AWS.S3; // Fix: Proper initialization
   private bucketName: string;
   private cloudFrontDomain?: string;
-  private s3Client: S3Client;
 
-constructor() {
-  this.s3Client = new S3Client({
-    region: process.env.AWS_REGION || 'us-east-1',
-    credentials: {
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-    },
-  });
-}
+  constructor() {
+    // Initialize AWS S3
+    AWS.config.update({
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+      region: process.env.AWS_REGION || 'us-east-1',
+    });
+
+    this.s3 = new AWS.S3(); // Fix: Proper S3 initialization
+    this.bucketName = process.env.S3_BUCKET_NAME || 'justconnect-files';
+    this.cloudFrontDomain = process.env.CLOUDFRONT_DOMAIN;
+  }
 
   // Configure multer for file uploads
   getMulterConfig(userId: string) {
@@ -139,25 +141,24 @@ constructor() {
       }
 
       // Save file metadata to database
-      const fileRecord = await prisma.file.create({
-        data: {
-          id: uuidv4(),
-          userId,
-          chatId,
-          filename: file.originalname,
-          mimeType: file.mimetype,
-          size: file.size,
-          s3Key: uploadResult.key,
-          url: this.getFileUrl(uploadResult.key),
-          thumbnailUrl,
-          duration,
-          metadata: {
-            uploadDate: new Date(),
-            processedAt: new Date(),
-            ...uploadResult.metadata,
-          },
-        },
-      });
+        const fileRecord = await prisma.file.create({
+    data: {
+      id: uuidv4(),
+      userId,
+      filename: file.originalname,
+      mimeType: file.mimetype,
+      size: file.size,
+      s3Key: uploadResult.key,
+      url: this.getFileUrl(uploadResult.key),
+      thumbnailUrl,
+      duration,
+      metadata: {
+        uploadDate: new Date(),
+        processedAt: new Date(),
+        chatId, // Store in metadata instead
+      },
+    },
+  });
 
       // Update user's storage usage
       await this.updateStorageUsage(userId, file.size);
@@ -340,8 +341,12 @@ constructor() {
   }
 
   private async getMaxFileSize(userId: string): Promise<number> {
-    const subscription = await paymentService.getUserSubscription(userId);
-    return (subscription.maxFileSize || 5) * 1024 * 1024; // Convert MB to bytes
+    try {
+      const subscription = await paymentService.getUserSubscription(userId);
+      return (subscription.maxFileSize || 5) * 1024 * 1024;
+    } catch (error) {
+      return 5 * 1024 * 1024; // Default 5MB
+    }
   }
 
   private async updateStorageUsage(userId: string, sizeDelta: number): Promise<void> {

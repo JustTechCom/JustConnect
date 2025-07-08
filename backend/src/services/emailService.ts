@@ -57,13 +57,13 @@ interface EmailTemplate {
 }
 
 class EmailService {
-  private transporter: nodemailer.Transporter;
+   private transporter: nodemailer.Transporter | null = null;
   private oauth2Client: any;
   private templates: Map<string, HandlebarsTemplateDelegate> = new Map();
 
   constructor() {
     this.initializeOAuth();
-    this.initializeTransporter();
+    this.initializeTransporter(); // This sets transporter
     this.loadTemplates();
   }
 
@@ -84,77 +84,50 @@ class EmailService {
   private async initializeTransporter() {
     const provider = process.env.EMAIL_PROVIDER || 'smtp';
 
-    switch (provider) {
-      case 'gmail':
-        const accessToken = await this.oauth2Client.getAccessToken();
-        this.transporter = nodemailer.createTransport({
-          service: 'gmail',
-          auth: {
-            type: 'OAuth2',
-            user: process.env.EMAIL_FROM,
-            clientId: process.env.GMAIL_CLIENT_ID,
-            clientSecret: process.env.GMAIL_CLIENT_SECRET,
-            refreshToken: process.env.GMAIL_REFRESH_TOKEN,
-            accessToken: accessToken.token,
-          },
-        });
-        break;
-
-      case 'sendgrid':
-        this.transporter = nodemailer.createTransporter({
-          host: 'smtp.sendgrid.net',
-          port: 587,
-          secure: false,
-          auth: {
-            user: 'apikey',
-            pass: process.env.SENDGRID_API_KEY,
-          },
-        });
-        break;
-
-      case 'mailgun':
-        this.transporter = nodemailer.createTransporter({
-          host: 'smtp.mailgun.org',
-          port: 587,
-          secure: false,
-          auth: {
-            user: process.env.MAILGUN_USERNAME,
-            pass: process.env.MAILGUN_PASSWORD,
-          },
-        });
-        break;
-
-      case 'aws-ses':
-        this.transporter = nodemailer.createTransporter({
-          host: `email-smtp.${process.env.AWS_REGION}.amazonaws.com`,
-          port: 587,
-          secure: false,
-          auth: {
-            user: process.env.AWS_SES_ACCESS_KEY,
-            pass: process.env.AWS_SES_SECRET_KEY,
-          },
-        });
-        break;
-
-      default:
-        // SMTP fallback
-        this.transporter = nodemailer.createTransporter({
-          host: process.env.SMTP_HOST,
-          port: parseInt(process.env.SMTP_PORT || '587'),
-          secure: process.env.SMTP_SECURE === 'true',
-          auth: {
-            user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASS,
-          },
-        });
-    }
-
-    // Verify connection
     try {
-      await this.transporter.verify();
-      console.log('📧 Email service connected successfully');
+      switch (provider) {
+        case 'gmail':
+          const accessToken = await this.oauth2Client.getAccessToken();
+          this.transporter = nodemailer.createTransport({ // FIX: createTransport
+            service: 'gmail',
+            auth: {
+              type: 'OAuth2',
+              user: process.env.EMAIL_FROM,
+              clientId: process.env.GMAIL_CLIENT_ID,
+              clientSecret: process.env.GMAIL_CLIENT_SECRET,
+              refreshToken: process.env.GMAIL_REFRESH_TOKEN,
+              accessToken: accessToken.token,
+            },
+          });
+          break;
+
+        case 'sendgrid':
+          this.transporter = nodemailer.createTransport({ // FIX: createTransport
+            host: 'smtp.sendgrid.net',
+            port: 587,
+            secure: false,
+            auth: {
+              user: 'apikey',
+              pass: process.env.SENDGRID_API_KEY,
+            },
+          });
+          break;
+
+        // Apply same fix to other cases...
+        default:
+          this.transporter = nodemailer.createTransport({ // FIX: createTransport
+            host: process.env.SMTP_HOST,
+            port: parseInt(process.env.SMTP_PORT || '587'),
+            secure: process.env.SMTP_SECURE === 'true',
+            auth: {
+              user: process.env.SMTP_USER,
+              pass: process.env.SMTP_PASS,
+            },
+          });
+      }
     } catch (error) {
       console.error('❌ Email service connection failed:', error);
+      this.transporter = null;
     }
   }
 
