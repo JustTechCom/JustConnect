@@ -22,7 +22,7 @@ services:
   # Backend API
   backend:
     build:
-      context: ./backend
+      context: ../backend
       dockerfile: Dockerfile.prod
     container_name: justconnect-backend
     environment:
@@ -45,7 +45,7 @@ services:
   # Frontend
   frontend:
     build:
-      context: ./frontend
+      context: ../frontend
       dockerfile: Dockerfile.prod
       args:
         - REACT_APP_API_URL=https://${DOMAIN_NAME}/api
@@ -160,7 +160,26 @@ services:
     networks:
       - justconnect-network
 
- 
+  # Backup Service
+  backup:
+    build: ./backup
+    container_name: justconnect-backup
+    environment:
+      - DB_HOST=postgres
+      - DB_NAME=justconnect_prod
+      - DB_USER=justconnect
+      - DB_PASSWORD=${DB_PASSWORD}
+      - S3_BUCKET=${BACKUP_S3_BUCKET}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+    volumes:
+      - ./backups:/backups
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    networks:
+      - justconnect-network
 
 volumes:
   postgres_data:

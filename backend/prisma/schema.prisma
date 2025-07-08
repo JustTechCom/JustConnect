@@ -8,65 +8,59 @@ datasource db {
 }
 
 model User {
-  id          String        @id @default(cuid())
-  email       String        @unique
-  username    String        @unique
+  id          String   @id @default(cuid())
+  email       String   @unique
+  username    String   @unique
   firstName   String
   lastName    String
   avatar      String?
   bio         String?
-  isOnline    Boolean       @default(false)
-  lastSeen    DateTime      @default(now())
+  isOnline    Boolean  @default(false)
+  lastSeen    DateTime @default(now())
   password    String
-  verified    Boolean       @default(false)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  verified    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  // İlişkiler
-  sentMessages     Message[]     @relation("MessageSender")
-  receivedMessages Message[]     @relation("MessageReceiver")
-  chatMembers      ChatMember[]  @relation("UserChatMembers")
-  createdChats     Chat[]        @relation("ChatCreator")
+  sentMessages     Message[] @relation("MessageSender")
+  chatMembers      ChatMember[]
+  createdChats     Chat[]    @relation("ChatCreator")
 
   @@map("users")
 }
 
-
 model Chat {
-  id             String        @id @default(cuid())
-  name           String?
-  type           ChatType      @default(DIRECT)
-  avatar         String?
-  description    String?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  createdBy      String
-  lastMessage    String?
-  lastMessageAt  DateTime?
+  id          String     @id @default(cuid())
+  name        String?
+  type        ChatType   @default(DIRECT)
+  avatar      String?
+  description String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  createdBy   String
+  lastMessage String?
+  lastMessageAt DateTime?
 
-  // İlişkiler
-  creator        User          @relation("ChatCreator", fields: [createdBy], references: [id])
-  members        ChatMember[]  @relation("ChatMembers")
-  messages       Message[]
+  creator     User         @relation("ChatCreator", fields: [createdBy], references: [id])
+  members     ChatMember[]
+  messages    Message[]
 
   @@map("chats")
 }
 
 model ChatMember {
-  id       String     @id @default(cuid())
+  id       String @id @default(cuid())
   chatId   String
   userId   String
   role     MemberRole @default(MEMBER)
   joinedAt DateTime   @default(now())
 
-  // İlişkiler
-  chat     Chat       @relation("ChatMembers", fields: [chatId], references: [id], onDelete: Cascade)
-  user     User       @relation("UserChatMembers", fields: [userId], references: [id], onDelete: Cascade)
+  chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([chatId, userId])
   @@map("chat_members")
 }
-
 
 model Message {
   id        String      @id @default(cuid())
@@ -81,11 +75,8 @@ model Message {
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
 
-  // İlişkiler
   chat     Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
   sender   User     @relation("MessageSender", fields: [senderId], references: [id])
-  receiver User?    @relation("MessageReceiver", fields: [receiverId], references: [id])
-  receiverId String?
   replyToMessage Message? @relation("MessageReply", fields: [replyTo], references: [id])
   replies        Message[] @relation("MessageReply")
 

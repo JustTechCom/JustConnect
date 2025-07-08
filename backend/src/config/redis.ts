@@ -5,6 +5,7 @@ let redis: Redis;
 export const initializeRedis = () => {
   try {
     redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
+      retryDelayOnFailover: 100,
       enableReadyCheck: true,
       maxRetriesPerRequest: 3,
     });
