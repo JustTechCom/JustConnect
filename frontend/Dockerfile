@@ -1,20 +1,34 @@
-# Frontend Dockerfile for Render - Simplified
+# Frontend Dockerfile - Debug ve Fix
 FROM node:18-alpine AS build
 
 WORKDIR /app
 
-# Copy package files
+# Copy package files first
 COPY package*.json ./
 
 # Install dependencies
 RUN npm install
 
-# Copy source code
-COPY . .
+# Copy ALL source files explicitly
+COPY public/ ./public/
+COPY src/ ./src/
+COPY tailwind.config.js ./
+COPY postcss.config.js ./
+COPY tsconfig.json ./
 
-# Build arguments for environment variables
-ARG REACT_APP_API_URL
-ARG REACT_APP_SOCKET_URL
+# Debug: Check what we have
+RUN echo "=== Directory structure ===" && \
+    ls -la && \
+    echo "=== Source directory ===" && \
+    ls -la src/ && \
+    echo "=== Looking for App files ===" && \
+    find . -name "*App*" -type f && \
+    echo "=== Index.tsx content ===" && \
+    head -5 src/index.tsx
+
+# Build arguments
+ARG REACT_APP_API_URL=http://localhost:5000/api
+ARG REACT_APP_SOCKET_URL=http://localhost:5000
 ARG REACT_APP_ENVIRONMENT=production
 
 # Set environment variables
@@ -22,9 +36,34 @@ ENV REACT_APP_API_URL=$REACT_APP_API_URL
 ENV REACT_APP_SOCKET_URL=$REACT_APP_SOCKET_URL
 ENV REACT_APP_ENVIRONMENT=$REACT_APP_ENVIRONMENT
 ENV GENERATE_SOURCEMAP=false
+ENV CI=false
 
 # Build the application
 RUN npm run build
+
+# Production stage
+FROM nginx:alpine AS production
+
+# Copy built app
+COPY --from=build /app/build /usr/share/nginx/html
+
+# Create nginx config
+RUN echo 'server { \
+    listen 80; \
+    server_name _; \
+    location / { \
+        root /usr/share/nginx/html; \
+        index index.html; \
+        try_files $uri $uri/ /index.html; \
+    } \
+    location /health { \
+        return 200 "healthy\\n"; \
+        add_header Content-Type text/plain; \
+    } \
+}' > /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
 
 # Production stage with Nginx
 FROM nginx:alpine AS production
