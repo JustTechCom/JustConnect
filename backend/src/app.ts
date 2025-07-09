@@ -51,7 +51,8 @@ app.use('/api/chats', chatRoutes);
 app.use('/api/users', userRoutes);
 
 // Socket.io setup
-SocketService(io);
+new SocketService(io);
+
 
 // Error handling
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
