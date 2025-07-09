@@ -112,6 +112,9 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.userId;
     const { type, memberIds, name, description } = req.body;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: "User not authenticated" });
+    }
 
     // Validate input
     if (!type || !['DIRECT', 'GROUP', 'CHANNEL'].includes(type)) {
@@ -128,6 +131,9 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
       });
     }
 
+    if (memberIds.some(id => !id)) {
+      return res.status(400).json({ success: false, error: "Invalid member ID in list" });
+    }
     // For direct chats, ensure only one other member
     if (type === 'DIRECT' && memberIds.length !== 1) {
       return res.status(400).json({
@@ -135,7 +141,8 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
         error: 'Direct chats must have exactly one other member'
       });
     }
-
+    console.log('userId:', userId);
+    console.log('memberIds:', memberIds);
     // Check if direct chat already exists
     if (type === 'DIRECT') {
       const existingChat = await prisma.chat.findFirst({
