@@ -1,3 +1,4 @@
+// backend/prisma/schema.prisma - Enhanced with friendship system
 generator client {
   provider = "prisma-client-js"
 }
@@ -6,7 +7,6 @@ datasource db {
   provider = "postgresql"
   url      = "postgresql://justadmin:0KJoeWqDaYo3DV4Tw36htNPa0yPRNu7Y@dpg-d1lq8jfdiees7380hrug-a/justconnect"
 }
-
 
 model User {
   id          String   @id @default(cuid())
@@ -27,14 +27,43 @@ model User {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  // Message relationships
   sentMessages     Message[] @relation("MessageSender")
+  
+  // Chat relationships
   chatMembers      ChatMember[]
   createdChats     Chat[]    @relation("ChatCreator")
+  
+  // File relationships
   files            File[]
+  
+  // Subscription relationships
   subscriptions    Subscription[]
   invoices         Invoice[]
+  
+  // Friendship relationships
+  sentFriendRequests     Friendship[] @relation("FriendshipRequester")
+  receivedFriendRequests Friendship[] @relation("FriendshipAddressee")
+  
+  // Notification relationships
+  notifications    Notification[]
 
   @@map("users")
+}
+
+model Friendship {
+  id          String   @id @default(cuid())
+  requesterId String
+  addresseeId String
+  status      FriendshipStatus @default(PENDING)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  requester   User @relation("FriendshipRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addressee   User @relation("FriendshipAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+
+  @@unique([requesterId, addresseeId])
+  @@map("friendships")
 }
 
 model Chat {
@@ -48,6 +77,8 @@ model Chat {
   createdBy     String
   lastMessage   String?
   lastMessageAt DateTime?
+  isArchived    Boolean    @default(false)
+  isPinned      Boolean    @default(false)
 
   creator     User         @relation("ChatCreator", fields: [createdBy], references: [id])
   members     ChatMember[]
@@ -62,6 +93,9 @@ model ChatMember {
   userId   String
   role     MemberRole @default(MEMBER)
   joinedAt DateTime   @default(now())
+  leftAt   DateTime?
+  isMuted  Boolean    @default(false)
+  isBlocked Boolean   @default(false)
 
   chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -81,6 +115,8 @@ model Message {
   delivered Boolean     @default(false)
   read      Boolean     @default(false)
   fileId    String?
+  isDeleted Boolean     @default(false)
+  deletedAt DateTime?
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
 
@@ -89,8 +125,22 @@ model Message {
   file     File?    @relation(fields: [fileId], references: [id])
   replyToMessage Message? @relation("MessageReply", fields: [replyTo], references: [id])
   replies        Message[] @relation("MessageReply")
+  reactions      MessageReaction[]
 
   @@map("messages")
+}
+
+model MessageReaction {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@map("message_reactions")
 }
 
 model File {
@@ -110,6 +160,21 @@ model File {
   messages    Message[]
 
   @@map("files")
+}
+
+model Notification {
+  id         String   @id @default(cuid())
+  userId     String
+  title      String
+  message    String
+  type       NotificationType
+  data       Json?
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
 }
 
 model Subscription {
@@ -183,4 +248,20 @@ enum MessageType {
   AUDIO
   VIDEO
   LOCATION
+  SYSTEM
+}
+
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  BLOCKED
+}
+
+enum NotificationType {
+  FRIEND_REQUEST
+  FRIEND_ACCEPTED
+  NEW_MESSAGE
+  CHAT_INVITE
+  SYSTEM
 }

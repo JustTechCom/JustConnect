@@ -1,3 +1,4 @@
+// frontend/src/services/api.ts - Enhanced API services
 import axios, { AxiosResponse } from 'axios';
 import { store } from '../store';
 import { setTokens, logout } from '../store/slices/authSlice';
@@ -9,7 +10,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 10000,
+  timeout: 30000, // Increased timeout
 });
 
 // Request interceptor for auth token
@@ -86,18 +87,28 @@ export const authAPI = {
     api.post('/auth/refresh', { refreshToken }),
   
   logout: () => api.post('/auth/logout'),
+  
+  forgotPassword: (email: string) =>
+    api.post('/auth/forgot-password', { email }),
+  
+  resetPassword: (token: string, password: string) =>
+    api.post('/auth/reset-password', { token, password }),
 };
 
 export const userAPI = {
   getCurrentUser: () => api.get('/users/me'),
   
   updateProfile: (userData: FormData) =>
-    api.put('/users/me', userData, {
+    api.put('/users/profile', userData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
   
-  searchUsers: (query: string) =>
-    api.get(`/users/search?q=${encodeURIComponent(query)}`),
+  searchUsers: (query: string, options?: { limit?: number; exclude?: string[] }) => {
+    const params = new URLSearchParams({ q: query });
+    if (options?.limit) params.append('limit', options.limit.toString());
+    if (options?.exclude?.length) params.append('exclude', options.exclude.join(','));
+    return api.get(`/users/search?${params}`);
+  },
   
   getUserById: (id: string) => api.get(`/users/${id}`),
   
@@ -108,6 +119,21 @@ export const userAPI = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+
+  // Friend system
+  sendFriendRequest: (userId: string) =>
+    api.post('/users/friend-request', { userId }),
+  
+  respondToFriendRequest: (friendshipId: string, action: 'accept' | 'reject') =>
+    api.put(`/users/friend-request/${friendshipId}`, { action }),
+  
+  getFriendRequests: (type: 'sent' | 'received' = 'received') =>
+    api.get(`/users/friend-requests?type=${type}`),
+  
+  getFriends: () => api.get('/users/friends'),
+  
+  removeFriend: (friendId: string) =>
+    api.delete(`/users/friends/${friendId}`),
 };
 
 export const chatAPI = {
@@ -122,7 +148,11 @@ export const chatAPI = {
   
   getChatById: (id: string) => api.get(`/chats/${id}`),
   
-  updateChat: (id: string, data: any) => api.put(`/chats/${id}`, data),
+  updateChat: (id: string, data: {
+    name?: string;
+    description?: string;
+    avatar?: string;
+  }) => api.put(`/chats/${id}`, data),
   
   deleteChat: (id: string) => api.delete(`/chats/${id}`),
   
@@ -136,17 +166,35 @@ export const chatAPI = {
     api.put(`/chats/${chatId}/members/${userId}`, { role }),
   
   leaveChat: (chatId: string) => api.post(`/chats/${chatId}/leave`),
+  
+  pinChat: (chatId: string) => api.put(`/chats/${chatId}/pin`),
+  
+  archiveChat: (chatId: string) => api.put(`/chats/${chatId}/archive`),
+  
+  muteChat: (chatId: string, duration?: number) =>
+    api.put(`/chats/${chatId}/mute`, { duration }),
 };
 
 export const messageAPI = {
-  getMessages: (chatId: string, page = 1, limit = 50) =>
-    api.get(`/messages/chat/${chatId}?page=${page}&limit=${limit}`),
+  getMessages: (chatId: string, options?: { 
+    page?: number; 
+    limit?: number; 
+    before?: string;
+  }) => {
+    const params = new URLSearchParams();
+    if (options?.page) params.append('page', options.page.toString());
+    if (options?.limit) params.append('limit', options.limit.toString());
+    if (options?.before) params.append('before', options.before);
+    return api.get(`/messages/chat/${chatId}?${params}`);
+  },
   
   sendMessage: (messageData: {
     chatId: string;
     content: string;
     type?: string;
     replyTo?: string;
+    fileId?: string;
+    tempId?: string;
   }) => api.post('/messages', messageData),
   
   editMessage: (messageId: string, content: string) =>
@@ -156,28 +204,256 @@ export const messageAPI = {
     api.delete(`/messages/${messageId}`),
   
   markAsRead: (chatId: string, messageIds: string[]) =>
-    api.post(`/messages/read`, { chatId, messageIds }),
+    api.post('/messages/mark-read', { chatId, messageIds }),
   
-  uploadFile: (file: File, chatId: string) => {
+  searchMessages: (chatId: string, query: string, limit = 20) =>
+    api.get(`/messages/chat/${chatId}/search?q=${encodeURIComponent(query)}&limit=${limit}`),
+  
+  addReaction: (messageId: string, emoji: string) =>
+    api.post(`/messages/${messageId}/reaction`, { emoji }),
+  
+  removeReaction: (messageId: string, emoji: string) =>
+    api.delete(`/messages/${messageId}/reaction`, { data: { emoji } }),
+  
+  uploadFile: (file: File, chatId: string, onProgress?: (progress: number) => void) => {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('chatId', chatId);
+    
     return api.post('/messages/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: (progressEvent) => {
+        if (onProgress && progressEvent.total) {
+          const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          onProgress(progress);
+        }
+      },
     });
   },
 };
 
+export const fileAPI = {
+  uploadFile: (file: File, onProgress?: (progress: number) => void) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    return api.post('/files/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: (progressEvent) => {
+        if (onProgress && progressEvent.total) {
+          const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          onProgress(progress);
+        }
+      },
+    });
+  },
+  
+  getFiles: (options?: { 
+    page?: number; 
+    limit?: number; 
+    type?: string;
+  }) => {
+    const params = new URLSearchParams();
+    if (options?.page) params.append('page', options.page.toString());
+    if (options?.limit) params.append('limit', options.limit.toString());
+    if (options?.type) params.append('type', options.type);
+    return api.get(`/files?${params}`);
+  },
+  
+  deleteFile: (fileId: string) => api.delete(`/files/${fileId}`),
+  
+  getFileUrl: (fileId: string) => api.get(`/files/${fileId}/url`),
+  
+  getStorageUsage: () => api.get('/files/storage'),
+};
+
 export const notificationAPI = {
-  getNotifications: () => api.get('/notifications'),
+  getNotifications: (options?: { page?: number; limit?: number }) => {
+    const params = new URLSearchParams();
+    if (options?.page) params.append('page', options.page.toString());
+    if (options?.limit) params.append('limit', options.limit.toString());
+    return api.get(`/notifications?${params}`);
+  },
   
   markAsRead: (notificationId: string) =>
     api.put(`/notifications/${notificationId}/read`),
   
   markAllAsRead: () => api.put('/notifications/read-all'),
   
-  updateSettings: (settings: any) =>
-    api.put('/notifications/settings', settings),
+  deleteNotification: (notificationId: string) =>
+    api.delete(`/notifications/${notificationId}`),
+  
+  updateSettings: (settings: {
+    email?: boolean;
+    push?: boolean;
+    desktop?: boolean;
+    sound?: boolean;
+  }) => api.put('/notifications/settings', settings),
+  
+  getSettings: () => api.get('/notifications/settings'),
+};
+
+export const settingsAPI = {
+  getSettings: () => api.get('/settings'),
+  
+  updateSettings: (settings: any) => api.put('/settings', settings),
+  
+  changePassword: (currentPassword: string, newPassword: string) =>
+    api.put('/settings/password', { currentPassword, newPassword }),
+  
+  enable2FA: () => api.post('/settings/2fa/enable'),
+  
+  disable2FA: (code: string) => api.post('/settings/2fa/disable', { code }),
+  
+  verify2FA: (code: string) => api.post('/settings/2fa/verify', { code }),
+  
+  downloadData: () => api.get('/settings/download-data', { responseType: 'blob' }),
+  
+  deleteAccount: (password: string) =>
+    api.delete('/settings/account', { data: { password } }),
+};
+
+export const adminAPI = {
+  getDashboard: () => api.get('/admin/dashboard'),
+  
+  getUsers: (options?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    status?: string;
+    role?: string;
+  }) => {
+    const params = new URLSearchParams();
+    if (options?.page) params.append('page', options.page.toString());
+    if (options?.limit) params.append('limit', options.limit.toString());
+    if (options?.search) params.append('search', options.search);
+    if (options?.status) params.append('status', options.status);
+    if (options?.role) params.append('role', options.role);
+    return api.get(`/admin/users?${params}`);
+  },
+  
+  getUser: (userId: string) => api.get(`/admin/users/${userId}`),
+  
+  updateUser: (userId: string, data: any) => api.put(`/admin/users/${userId}`, data),
+  
+  banUser: (userId: string, reason: string, duration?: number) =>
+    api.post(`/admin/users/${userId}/ban`, { reason, duration }),
+  
+  unbanUser: (userId: string) => api.post(`/admin/users/${userId}/unban`),
+  
+  getChats: (options?: { page?: number; limit?: number; type?: string; search?: string }) => {
+    const params = new URLSearchParams();
+    if (options?.page) params.append('page', options.page.toString());
+    if (options?.limit) params.append('limit', options.limit.toString());
+    if (options?.type) params.append('type', options.type);
+    if (options?.search) params.append('search', options.search);
+    return api.get(`/admin/chats?${params}`);
+  },
+  
+  deleteChat: (chatId: string) => api.delete(`/admin/chats/${chatId}`),
+  
+  getMessages: (options?: {
+    page?: number;
+    limit?: number;
+    chatId?: string;
+    userId?: string;
+    flagged?: boolean;
+  }) => {
+    const params = new URLSearchParams();
+    if (options?.page) params.append('page', options.page.toString());
+    if (options?.limit) params.append('limit', options.limit.toString());
+    if (options?.chatId) params.append('chatId', options.chatId);
+    if (options?.userId) params.append('userId', options.userId);
+    if (options?.flagged) params.append('flagged', 'true');
+    return api.get(`/admin/messages?${params}`);
+  },
+  
+  deleteMessage: (messageId: string) => api.delete(`/admin/messages/${messageId}`),
+  
+  getAnalytics: (startDate?: string, endDate?: string) => {
+    const params = new URLSearchParams();
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
+    return api.get(`/admin/analytics?${params}`);
+  },
+  
+  getSystemSettings: () => api.get('/admin/settings'),
+  
+  updateSystemSettings: (settings: any) => api.put('/admin/settings', settings),
+  
+  sendBroadcast: (data: {
+    title: string;
+    message: string;
+    type: string;
+    sendEmail?: boolean;
+  }) => api.post('/admin/broadcast', data),
+  
+  getHealth: () => api.get('/admin/health'),
+};
+
+// Utility functions
+export const createFormData = (data: Record<string, any>): FormData => {
+  const formData = new FormData();
+  Object.entries(data).forEach(([key, value]) => {
+    if (value instanceof File) {
+      formData.append(key, value);
+    } else if (value instanceof FileList) {
+      Array.from(value).forEach((file, index) => {
+        formData.append(`${key}[${index}]`, file);
+      });
+    } else if (Array.isArray(value)) {
+      value.forEach((item, index) => {
+        formData.append(`${key}[${index}]`, item);
+      });
+    } else if (value !== null && value !== undefined) {
+      formData.append(key, value.toString());
+    }
+  });
+  return formData;
+};
+
+export const downloadFile = async (url: string, filename: string): Promise<void> => {
+  try {
+    const response = await api.get(url, { responseType: 'blob' });
+    const blob = new Blob([response.data]);
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(downloadUrl);
+  } catch (error) {
+    console.error('Download failed:', error);
+    throw error;
+  }
+};
+
+export const getFilePreviewUrl = (fileId: string): string => {
+  return `${API_BASE_URL}/files/${fileId}/preview`;
+};
+
+export const getThumbnailUrl = (fileId: string): string => {
+  return `${API_BASE_URL}/files/${fileId}/thumbnail`;
+};
+
+// Error handling utility
+export const handleApiError = (error: any): string => {
+  if (error.response?.data?.error) {
+    return error.response.data.error;
+  } else if (error.response?.data?.message) {
+    return error.response.data.message;
+  } else if (error.message) {
+    return error.message;
+  } else {
+    return 'An unexpected error occurred';
+  }
+};
+
+// Health check
+export const healthCheck = (): Promise<AxiosResponse> => {
+  return api.get('/health');
 };
 
 export default api;
