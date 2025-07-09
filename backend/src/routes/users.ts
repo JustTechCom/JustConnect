@@ -36,7 +36,7 @@ const upload = multer({
 });
 
 // Get current user
-router.get('/me', auth, async (req: Request, res: Response) => {
+router.get('/me', authenticateToken, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.userId;
 
