@@ -195,7 +195,7 @@ MIT License
 ## 📞 İletişim
 
 - GitHub: [kadirertancam]
-- Email: [your-email@example.com]
+- Email: [info@justtech.work]
 
 ---
 
