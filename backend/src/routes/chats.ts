@@ -215,44 +215,48 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
     }
 
     // Create the chat
-    const chat = await prisma.chat.create({
-      data: {
-        type: type as ChatType,
-        name: name || null,
-        description: description || null,
-        createdBy: userId,
-        members: {
-          create: [
-            {
-              userId: userId,
-              role: type === 'DIRECT' ? 'MEMBER' : 'ADMIN'
-            },
-            ...memberIds.map((memberId: string) => ({
-              userId: memberId,
-              role: 'MEMBER' as MemberRole
-            }))
-          ]
-        }
-      },
+const chat = await prisma.chat.create({
+  data: {
+    type: type as ChatType,
+    name: name || null,
+    description: description || null,
+    createdBy: userId,
+    members: {
+      create: [
+        {
+          userId: userId,
+          role: type === 'DIRECT' ? 'MEMBER' : 'ADMIN'
+        },
+        ...memberIds.map((memberId: string) => ({
+          userId: memberId,
+          role: 'MEMBER' as MemberRole
+        }))
+      ]
+    },
+    creator: {
+      connect: { id: userId }
+    }
+  },
+  include: {
+    members: {
       include: {
-        members: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                email: true,
-                username: true,
-                firstName: true,  // Added firstName
-                lastName: true,   // Added lastName
-                avatar: true,
-                isOnline: true,
-                lastSeen: true
-              }
-            }
+        user: {
+          select: {
+            id: true,
+            email: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            avatar: true,
+            isOnline: true,
+            lastSeen: true
           }
         }
       }
-    });
+    }
+  }
+});
+
 
     const transformedChat = {
       id: chat.id,
