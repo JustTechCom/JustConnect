@@ -46,7 +46,6 @@ const io = new Server(server, {
   },
   allowEIO3: true, // Allow Engine.IO v3 clients
   transports: ['websocket', 'polling'],
-  upgrade: true,
   maxHttpBufferSize: 1e8,
   pingTimeout: 60000,
   pingInterval: 25000,
@@ -109,10 +108,10 @@ app.get('/socket-health', (req, res) => {
     status: 'OK',
     connectedClients: io.engine.clientsCount || 0,
     engineInfo: {
-      protocol: io.engine.protocol,
-      pingTimeout: io.engine.pingTimeout,
-      pingInterval: io.engine.pingInterval,
-      maxHttpBufferSize: io.engine.maxHttpBufferSize,
+      pingTimeout: io.opts.pingTimeout,
+      pingInterval: io.opts.pingInterval,
+      maxHttpBufferSize: io.opts.maxHttpBufferSize,
+      transports: io.opts.transports,
     },
     timestamp: new Date().toISOString(),
   };
