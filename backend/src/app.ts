@@ -10,7 +10,7 @@ import authRoutes from './routes/auth';
 import messageRoutes from './routes/messages';
 import chatRoutes from './routes/chats';
 import userRoutes from './routes/users';
-import { setupSocketHandlers } from './services/socketService';
+import SocketService from './services/socketService';
 import { initializeDatabase } from './config/database';
 import { initializeRedis } from './config/redis';
 

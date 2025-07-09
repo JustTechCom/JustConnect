@@ -1,13 +1,13 @@
 // backend/src/routes/chats.ts - Fixed version
 import { Router, Request, Response } from 'express';
 import { PrismaClient, ChatType, MemberRole } from '@prisma/client';
-import { auth } from '../middleware/auth';
+import { authenticateToken } from '../middleware/auth';
 
 const router = Router();
 const prisma = new PrismaClient();
 
 // Get user's chats
-router.get('/', auth, async (req: Request, res: Response) => {
+router.get('/', authenticateToken, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.userId;
 
@@ -108,7 +108,7 @@ router.get('/', auth, async (req: Request, res: Response) => {
 });
 
 // Create a new chat
-router.post('/', auth, async (req: Request, res: Response) => {
+router.post('/', authenticateToken, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.userId;
     const { type, memberIds, name, description } = req.body;
@@ -298,7 +298,7 @@ router.post('/', auth, async (req: Request, res: Response) => {
 });
 
 // Get specific chat
-router.get('/:chatId', auth, async (req: Request, res: Response) => {
+router.get('/:chatId', authenticateToken, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.userId;
     const { chatId } = req.params;
@@ -404,7 +404,7 @@ router.get('/:chatId', auth, async (req: Request, res: Response) => {
 });
 
 // Update chat
-router.put('/:chatId', auth, async (req: Request, res: Response) => {
+router.put('/:chatId', authenticateToken, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.userId;
     const { chatId } = req.params;
@@ -500,7 +500,7 @@ router.put('/:chatId', auth, async (req: Request, res: Response) => {
 });
 
 // Add members to chat
-router.post('/:chatId/members', auth, async (req: Request, res: Response) => {
+router.post('/:chatId/members', authenticateToken, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.userId;
     const { chatId } = req.params;
@@ -592,7 +592,7 @@ router.post('/:chatId/members', auth, async (req: Request, res: Response) => {
 });
 
 // Leave chat
-router.post('/:chatId/leave', auth, async (req: Request, res: Response) => {
+router.post('/:chatId/leave', authenticateToken, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.userId;
     const { chatId } = req.params;

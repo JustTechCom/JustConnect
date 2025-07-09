@@ -4,7 +4,7 @@ import { PrismaClient, FriendshipStatus } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import multer from 'multer';
 import path from 'path';
-import { auth } from '../middleware/auth';
+import { authenticateToken } from '../middleware/auth';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -78,7 +78,7 @@ router.get('/me', auth, async (req: Request, res: Response) => {
 });
 
 // Update user profile
-router.put('/profile', auth, upload.single('avatar'), async (req: Request, res: Response) => {
+router.put('/profile', authenticateToken, upload.single('avatar'), async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.userId;
     const { firstName, lastName, bio } = req.body;
@@ -125,7 +125,7 @@ router.put('/profile', auth, upload.single('avatar'), async (req: Request, res: 
 });
 
 // Search users
-router.get('/search', auth, async (req: Request, res: Response) => {
+router.get('/search', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { q: query, limit = '20', exclude } = req.query;
 
@@ -217,7 +217,7 @@ router.get('/search', auth, async (req: Request, res: Response) => {
 });
 
 // Get user by ID
-router.get('/:userId', auth, async (req: Request, res: Response) => {
+router.get('/:userId', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
 
@@ -258,7 +258,7 @@ router.get('/:userId', auth, async (req: Request, res: Response) => {
 });
 
 // Send friend request
-router.post('/friend-request', auth, async (req: Request, res: Response) => {
+router.post('/friend-request', authenticateToken, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.userId;
     const { userId: targetUserId } = req.body;
@@ -350,7 +350,7 @@ router.post('/friend-request', auth, async (req: Request, res: Response) => {
 });
 
 // Get friend requests
-router.get('/friend-requests', auth, async (req: Request, res: Response) => {
+router.get('/friend-requests', authenticateToken, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.userId;
     const { type = 'received' } = req.query;
@@ -419,7 +419,7 @@ router.get('/friend-requests', auth, async (req: Request, res: Response) => {
 });
 
 // Respond to friend request
-router.put('/friend-request/:friendshipId', auth, async (req: Request, res: Response) => {
+router.put('/friend-request/:friendshipId', authenticateToken, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.userId;
     const { friendshipId } = req.params;
@@ -503,7 +503,7 @@ router.put('/friend-request/:friendshipId', auth, async (req: Request, res: Resp
 });
 
 // Get friends list
-router.get('/friends', auth, async (req: Request, res: Response) => {
+router.get('/friends', authenticateToken, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.userId;
 
@@ -562,7 +562,7 @@ router.get('/friends', auth, async (req: Request, res: Response) => {
 });
 
 // Remove friend
-router.delete('/friends/:friendId', auth, async (req: Request, res: Response) => {
+router.delete('/friends/:friendId', authenticateToken, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.userId;
     const { friendId } = req.params;
@@ -603,7 +603,7 @@ router.delete('/friends/:friendId', auth, async (req: Request, res: Response) =>
 });
 
 // Upload avatar
-router.post('/avatar', auth, upload.single('avatar'), async (req: Request, res: Response) => {
+router.post('/avatar', authenticateToken, upload.single('avatar'), async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.userId;
 
