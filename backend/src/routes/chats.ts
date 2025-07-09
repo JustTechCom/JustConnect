@@ -1,38 +1,34 @@
-// backend/src/routes/chats.ts - Enhanced chat management
-import express, { Response } from 'express';
-import { body, validationResult } from 'express-validator';
-import { prisma } from '../config/database';
-import { authenticateToken } from '../middleware/auth';
-import { AuthRequest } from '../types';
-import { io } from '../app';
+// backend/src/routes/chats.ts - Fixed version
+import { Router, Request, Response } from 'express';
+import { PrismaClient, ChatType, MemberRole } from '@prisma/client';
+import { auth } from '../middleware/auth';
 
-const router = express.Router();
+const router = Router();
+const prisma = new PrismaClient();
 
-// Get user's chats with enhanced data
-router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
+// Get user's chats
+router.get('/', auth, async (req: Request, res: Response) => {
   try {
-    const userId = req.user!.id;
+    const userId = (req as any).user.userId;
 
     const chats = await prisma.chat.findMany({
       where: {
         members: {
-          some: { 
-            userId,
-            leftAt: null 
+          some: {
+            userId: userId
           }
-        },
-        isArchived: false
+        }
       },
       include: {
         members: {
-          where: { leftAt: null },
           include: {
             user: {
               select: {
                 id: true,
+                email: true,
                 username: true,
-                firstName: true,
-                lastName: true,
+                firstName: true,  // Added firstName
+                lastName: true,   // Added lastName
                 avatar: true,
                 isOnline: true,
                 lastSeen: true
@@ -42,115 +38,125 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
         },
         messages: {
           take: 1,
-          orderBy: { createdAt: 'desc' },
+          orderBy: {
+            createdAt: 'desc'
+          },
           include: {
             sender: {
               select: {
                 id: true,
-                firstName: true,
-                lastName: true
+                username: true,
+                firstName: true,  // Added firstName
+                lastName: true    // Added lastName
               }
             }
           }
         },
         _count: {
-          select: { 
-            messages: {
-              where: {
-                isDeleted: false
-              }
-            }
+          select: {
+            messages: true
           }
         }
       },
-      orderBy: [
-        { isPinned: 'desc' },
-        { lastMessageAt: 'desc' },
-        { createdAt: 'desc' }
-      ]
+      orderBy: {
+        updatedAt: 'desc'
+      }
     });
 
-    // Get unread message counts for each chat
-    const chatsWithUnread = await Promise.all(
-      chats.map(async (chat) => {
-        const unreadCount = await prisma.message.count({
-          where: {
-            chatId: chat.id,
-            senderId: { not: userId },
-            read: false,
-            isDeleted: false
-          }
-        });
-
-        // Get the other user's info for direct chats
-        let otherUser = null;
-        if (chat.type === 'DIRECT') {
-          const otherMember = chat.members.find(member => member.userId !== userId);
-          if (otherMember) {
-            otherUser = otherMember.user;
-          }
+    // Transform the data
+    const transformedChats = chats.map(chat => ({
+      id: chat.id,
+      name: chat.name,
+      type: chat.type,
+      avatar: chat.avatar,
+      description: chat.description,
+      createdAt: chat.createdAt,
+      updatedAt: chat.updatedAt,
+      createdBy: chat.createdBy,
+      lastMessage: chat.messages[0]?.content || null,
+      lastMessageAt: chat.messages[0]?.createdAt || chat.createdAt,
+      messageCount: chat._count.messages,
+      members: chat.members.map(member => ({
+        id: member.id,
+        chatId: member.chatId,
+        userId: member.userId,
+        role: member.role,
+        joinedAt: member.joinedAt,
+        user: {
+          id: member.user.id,
+          username: member.user.username,
+          firstName: member.user.firstName,
+          lastName: member.user.lastName,
+          avatar: member.user.avatar,
+          isOnline: member.user.isOnline,
+          lastSeen: member.user.lastSeen
         }
+      }))
+    }));
 
-        return {
-          ...chat,
-          unreadCount,
-          otherUser,
-          lastMessage: chat.messages[0] || null
-        };
-      })
-    );
-
-    res.json({ chats: chatsWithUnread });
+    res.json({
+      success: true,
+      chats: transformedChats
+    });
   } catch (error) {
-    console.error('Get chats error:', error);
-    res.status(500).json({ error: 'Server error' });
+    console.error('Error fetching chats:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch chats'
+    });
   }
 });
 
-// Create new chat
-router.post('/', authenticateToken, [
-  body('type').isIn(['DIRECT', 'GROUP', 'CHANNEL']),
-  body('memberIds').isArray().isLength({ min: 1 }),
-  body('name').optional().trim().isLength({ min: 1, max: 100 }),
-  body('description').optional().trim().isLength({ max: 500 })
-], async (req: AuthRequest, res: Response) => {
+// Create a new chat
+router.post('/', auth, async (req: Request, res: Response) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
-
+    const userId = (req as any).user.userId;
     const { type, memberIds, name, description } = req.body;
-    const createdBy = req.user!.id;
 
-    // Validate member IDs
-    const validMembers = await prisma.user.findMany({
-      where: { 
-        id: { in: memberIds },
-        banned: false 
-      },
-      select: { id: true }
-    });
-
-    if (validMembers.length !== memberIds.length) {
-      return res.status(400).json({ error: 'Some users are invalid or banned' });
+    // Validate input
+    if (!type || !['DIRECT', 'GROUP', 'CHANNEL'].includes(type)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid chat type'
+      });
     }
 
-    // For direct chats, check if chat already exists
-    if (type === 'DIRECT') {
-      if (memberIds.length !== 1) {
-        return res.status(400).json({ error: 'Direct chat must have exactly one other member' });
-      }
+    if (!memberIds || !Array.isArray(memberIds)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Member IDs are required'
+      });
+    }
 
-      const otherUserId = memberIds[0];
+    // For direct chats, ensure only one other member
+    if (type === 'DIRECT' && memberIds.length !== 1) {
+      return res.status(400).json({
+        success: false,
+        error: 'Direct chats must have exactly one other member'
+      });
+    }
+
+    // Check if direct chat already exists
+    if (type === 'DIRECT') {
       const existingChat = await prisma.chat.findFirst({
         where: {
           type: 'DIRECT',
-          members: {
-            every: {
-              userId: { in: [createdBy, otherUserId] }
+          AND: [
+            {
+              members: {
+                some: {
+                  userId: userId
+                }
+              }
+            },
+            {
+              members: {
+                some: {
+                  userId: memberIds[0]
+                }
+              }
             }
-          }
+          ]
         },
         include: {
           members: {
@@ -158,9 +164,10 @@ router.post('/', authenticateToken, [
               user: {
                 select: {
                   id: true,
+                  email: true,
                   username: true,
-                  firstName: true,
-                  lastName: true,
+                  firstName: true,  // Added firstName
+                  lastName: true,   // Added lastName
                   avatar: true,
                   isOnline: true,
                   lastSeen: true
@@ -171,22 +178,59 @@ router.post('/', authenticateToken, [
         }
       });
 
-      if (existingChat && existingChat.members.length === 2) {
-        return res.json({ chat: existingChat });
+      if (existingChat) {
+        return res.json({
+          success: true,
+          chat: {
+            id: existingChat.id,
+            name: existingChat.name,
+            type: existingChat.type,
+            avatar: existingChat.avatar,
+            description: existingChat.description,
+            createdAt: existingChat.createdAt,
+            updatedAt: existingChat.updatedAt,
+            createdBy: existingChat.createdBy,
+            lastMessage: null,
+            lastMessageAt: existingChat.createdAt,
+            messageCount: 0,
+            members: existingChat.members.map(member => ({
+              id: member.id,
+              chatId: member.chatId,
+              userId: member.userId,
+              role: member.role,
+              joinedAt: member.joinedAt,
+              user: {
+                id: member.user.id,
+                username: member.user.username,
+                firstName: member.user.firstName,
+                lastName: member.user.lastName,
+                avatar: member.user.avatar,
+                isOnline: member.user.isOnline,
+                lastSeen: member.user.lastSeen
+              }
+            }))
+          }
+        });
       }
     }
 
     // Create the chat
     const chat = await prisma.chat.create({
       data: {
-        type,
-        name: type === 'DIRECT' ? null : name,
-        description,
-        createdBy,
+        type: type as ChatType,
+        name: name || null,
+        description: description || null,
+        createdBy: userId,
         members: {
           create: [
-            { userId: createdBy, role: type === 'DIRECT' ? 'MEMBER' : 'ADMIN' },
-            ...memberIds.map((userId: string) => ({ userId, role: 'MEMBER' }))
+            {
+              userId: userId,
+              role: type === 'DIRECT' ? 'MEMBER' : 'ADMIN'
+            },
+            ...memberIds.map((memberId: string) => ({
+              userId: memberId,
+              role: 'MEMBER' as MemberRole
+            }))
           ]
         }
       },
@@ -196,9 +240,10 @@ router.post('/', authenticateToken, [
             user: {
               select: {
                 id: true,
+                email: true,
                 username: true,
-                firstName: true,
-                lastName: true,
+                firstName: true,  // Added firstName
+                lastName: true,   // Added lastName
                 avatar: true,
                 isOnline: true,
                 lastSeen: true
@@ -209,157 +254,198 @@ router.post('/', authenticateToken, [
       }
     });
 
-    // Send system message for group/channel creation
-    if (type !== 'DIRECT') {
-      const systemMessage = await prisma.message.create({
-        data: {
-          content: `${req.user!.firstName} ${req.user!.lastName} created the ${type.toLowerCase()}`,
-          type: 'SYSTEM',
-          chatId: chat.id,
-          senderId: createdBy
-        },
-        include: {
-          sender: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              avatar: true
-            }
-          }
+    const transformedChat = {
+      id: chat.id,
+      name: chat.name,
+      type: chat.type,
+      avatar: chat.avatar,
+      description: chat.description,
+      createdAt: chat.createdAt,
+      updatedAt: chat.updatedAt,
+      createdBy: chat.createdBy,
+      lastMessage: null,
+      lastMessageAt: chat.createdAt,
+      messageCount: 0,
+      members: chat.members.map(member => ({
+        id: member.id,
+        chatId: member.chatId,
+        userId: member.userId,
+        role: member.role,
+        joinedAt: member.joinedAt,
+        user: {
+          id: member.user.id,
+          username: member.user.username,
+          firstName: member.user.firstName,
+          lastName: member.user.lastName,
+          avatar: member.user.avatar,
+          isOnline: member.user.isOnline,
+          lastSeen: member.user.lastSeen
         }
-      });
+      }))
+    };
 
-      // Emit system message to all members
-      chat.members.forEach(member => {
-        io.to(`user_${member.userId}`).emit('new_message', systemMessage);
-      });
-    }
-
-    // Notify all members about new chat
-    memberIds.forEach((memberId: string) => {
-      io.to(`user_${memberId}`).emit('new_chat', chat);
+    res.status(201).json({
+      success: true,
+      chat: transformedChat
     });
-
-    res.status(201).json({ chat });
   } catch (error) {
-    console.error('Create chat error:', error);
-    res.status(500).json({ error: 'Server error' });
+    console.error('Error creating chat:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create chat'
+    });
   }
 });
 
-// Get specific chat details
-router.get('/:chatId', authenticateToken, async (req: AuthRequest, res: Response) => {
+// Get specific chat
+router.get('/:chatId', auth, async (req: Request, res: Response) => {
   try {
+    const userId = (req as any).user.userId;
     const { chatId } = req.params;
-    const userId = req.user!.id;
 
-    // Verify user is a member of the chat
-    const membership = await prisma.chatMember.findFirst({
+    const chat = await prisma.chat.findFirst({
       where: {
-        chatId,
-        userId,
-        leftAt: null
-      }
-    });
-
-    if (!membership) {
-      return res.status(403).json({ error: 'You are not a member of this chat' });
-    }
-
-    const chat = await prisma.chat.findUnique({
-      where: { id: chatId },
+        id: chatId,
+        members: {
+          some: {
+            userId: userId
+          }
+        }
+      },
       include: {
         members: {
-          where: { leftAt: null },
           include: {
             user: {
               select: {
                 id: true,
+                email: true,
                 username: true,
-                firstName: true,
-                lastName: true,
+                firstName: true,  // Added firstName
+                lastName: true,   // Added lastName
                 avatar: true,
                 isOnline: true,
-                lastSeen: true,
-                verified: true
+                lastSeen: true
               }
             }
           }
         },
-        creator: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            avatar: true
+        messages: {
+          take: 1,
+          orderBy: {
+            createdAt: 'desc'
+          },
+          include: {
+            sender: {
+              select: {
+                id: true,
+                username: true,
+                firstName: true,  // Added firstName
+                lastName: true    // Added lastName
+              }
+            }
           }
         },
         _count: {
-          select: { messages: true }
+          select: {
+            messages: true
+          }
         }
       }
     });
 
     if (!chat) {
-      return res.status(404).json({ error: 'Chat not found' });
+      return res.status(404).json({
+        success: false,
+        error: 'Chat not found'
+      });
     }
 
-    res.json({ chat });
+    const transformedChat = {
+      id: chat.id,
+      name: chat.name,
+      type: chat.type,
+      avatar: chat.avatar,
+      description: chat.description,
+      createdAt: chat.createdAt,
+      updatedAt: chat.updatedAt,
+      createdBy: chat.createdBy,
+      lastMessage: chat.messages[0]?.content || null,
+      lastMessageAt: chat.messages[0]?.createdAt || chat.createdAt,
+      messageCount: chat._count.messages,
+      members: chat.members.map(member => ({
+        id: member.id,
+        chatId: member.chatId,
+        userId: member.userId,
+        role: member.role,
+        joinedAt: member.joinedAt,
+        user: {
+          id: member.user.id,
+          username: member.user.username,
+          firstName: member.user.firstName,
+          lastName: member.user.lastName,
+          avatar: member.user.avatar,
+          isOnline: member.user.isOnline,
+          lastSeen: member.user.lastSeen
+        }
+      }))
+    };
+
+    res.json({
+      success: true,
+      chat: transformedChat
+    });
   } catch (error) {
-    console.error('Get chat details error:', error);
-    res.status(500).json({ error: 'Server error' });
+    console.error('Error fetching chat:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch chat'
+    });
   }
 });
 
 // Update chat
-router.put('/:chatId', authenticateToken, [
-  body('name').optional().trim().isLength({ min: 1, max: 100 }),
-  body('description').optional().trim().isLength({ max: 500 }),
-  body('avatar').optional().isURL()
-], async (req: AuthRequest, res: Response) => {
+router.put('/:chatId', auth, async (req: Request, res: Response) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
-
+    const userId = (req as any).user.userId;
     const { chatId } = req.params;
     const { name, description, avatar } = req.body;
-    const userId = req.user!.id;
 
-    // Check if user is admin of the chat
+    // Check if user is a member and has permission to update
     const membership = await prisma.chatMember.findFirst({
       where: {
-        chatId,
-        userId,
-        role: { in: ['ADMIN', 'MODERATOR'] },
-        leftAt: null
+        chatId: chatId,
+        userId: userId,
+        role: {
+          in: ['ADMIN', 'MODERATOR']
+        }
       }
     });
 
     if (!membership) {
-      return res.status(403).json({ error: 'You do not have permission to update this chat' });
+      return res.status(403).json({
+        success: false,
+        error: 'You do not have permission to update this chat'
+      });
     }
 
     const updatedChat = await prisma.chat.update({
       where: { id: chatId },
       data: {
-        ...(name && { name }),
-        ...(description !== undefined && { description }),
-        ...(avatar && { avatar })
+        name: name !== undefined ? name : undefined,
+        description: description !== undefined ? description : undefined,
+        avatar: avatar !== undefined ? avatar : undefined,
+        updatedAt: new Date()
       },
       include: {
         members: {
-          where: { leftAt: null },
           include: {
             user: {
               select: {
                 id: true,
+                email: true,
                 username: true,
-                firstName: true,
-                lastName: true,
+                firstName: true,  // Added firstName
+                lastName: true,   // Added lastName
                 avatar: true,
                 isOnline: true,
                 lastSeen: true
@@ -370,133 +456,117 @@ router.put('/:chatId', authenticateToken, [
       }
     });
 
-    // Notify all members about chat update
-    updatedChat.members.forEach(member => {
-      io.to(`user_${member.userId}`).emit('chat_updated', updatedChat);
-    });
+    const transformedChat = {
+      id: updatedChat.id,
+      name: updatedChat.name,
+      type: updatedChat.type,
+      avatar: updatedChat.avatar,
+      description: updatedChat.description,
+      createdAt: updatedChat.createdAt,
+      updatedAt: updatedChat.updatedAt,
+      createdBy: updatedChat.createdBy,
+      lastMessage: null,
+      lastMessageAt: updatedChat.updatedAt,
+      messageCount: 0,
+      members: updatedChat.members.map(member => ({
+        id: member.id,
+        chatId: member.chatId,
+        userId: member.userId,
+        role: member.role,
+        joinedAt: member.joinedAt,
+        user: {
+          id: member.user.id,
+          username: member.user.username,
+          firstName: member.user.firstName,
+          lastName: member.user.lastName,
+          avatar: member.user.avatar,
+          isOnline: member.user.isOnline,
+          lastSeen: member.user.lastSeen
+        }
+      }))
+    };
 
-    res.json({ chat: updatedChat });
+    res.json({
+      success: true,
+      chat: transformedChat
+    });
   } catch (error) {
-    console.error('Update chat error:', error);
-    res.status(500).json({ error: 'Server error' });
+    console.error('Error updating chat:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update chat'
+    });
   }
 });
 
 // Add members to chat
-router.post('/:chatId/members', authenticateToken, [
-  body('memberIds').isArray().isLength({ min: 1 })
-], async (req: AuthRequest, res: Response) => {
+router.post('/:chatId/members', auth, async (req: Request, res: Response) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
-
+    const userId = (req as any).user.userId;
     const { chatId } = req.params;
     const { memberIds } = req.body;
-    const userId = req.user!.id;
 
-    // Check if user can add members (admin/moderator or group chat)
-    const [membership, chat] = await Promise.all([
-      prisma.chatMember.findFirst({
-        where: {
-          chatId,
-          userId,
-          leftAt: null
-        }
-      }),
-      prisma.chat.findUnique({
-        where: { id: chatId },
-        select: { type: true }
-      })
-    ]);
-
-    if (!membership || !chat) {
-      return res.status(404).json({ error: 'Chat not found or you are not a member' });
+    if (!memberIds || !Array.isArray(memberIds)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Member IDs are required'
+      });
     }
 
-    if (chat.type === 'DIRECT') {
-      return res.status(400).json({ error: 'Cannot add members to direct chat' });
-    }
-
-    if (membership.role === 'MEMBER' && chat.type === 'CHANNEL') {
-      return res.status(403).json({ error: 'Only admins can add members to channels' });
-    }
-
-    // Validate new members
-    const validMembers = await prisma.user.findMany({
-      where: { 
-        id: { in: memberIds },
-        banned: false 
-      },
-      select: { id: true, firstName: true, lastName: true }
-    });
-
-    if (validMembers.length !== memberIds.length) {
-      return res.status(400).json({ error: 'Some users are invalid or banned' });
-    }
-
-    // Check which users are not already members
-    const existingMembers = await prisma.chatMember.findMany({
+    // Check if user has permission to add members
+    const membership = await prisma.chatMember.findFirst({
       where: {
-        chatId,
-        userId: { in: memberIds },
-        leftAt: null
-      },
-      select: { userId: true }
-    });
-
-    const existingMemberIds = existingMembers.map(m => m.userId);
-    const newMemberIds = memberIds.filter((id: string) => !existingMemberIds.includes(id));
-
-    if (newMemberIds.length === 0) {
-      return res.status(400).json({ error: 'All users are already members' });
-    }
-
-    // Add new members
-    await prisma.chatMember.createMany({
-      data: newMemberIds.map((memberId: string) => ({
-        chatId,
-        userId: memberId,
-        role: 'MEMBER'
-      }))
-    });
-
-    // Create system message
-    const addedUsers = validMembers.filter(user => newMemberIds.includes(user.id));
-    const systemMessage = await prisma.message.create({
-      data: {
-        content: `${req.user!.firstName} ${req.user!.lastName} added ${addedUsers.map(u => `${u.firstName} ${u.lastName}`).join(', ')}`,
-        type: 'SYSTEM',
-        chatId,
-        senderId: userId
-      },
-      include: {
-        sender: {
-          select: {
-            id: true,
-            username: true,
-            firstName: true,
-            lastName: true,
-            avatar: true
-          }
+        chatId: chatId,
+        userId: userId,
+        role: {
+          in: ['ADMIN', 'MODERATOR']
         }
       }
     });
 
-    // Get updated chat
+    if (!membership) {
+      return res.status(403).json({
+        success: false,
+        error: 'You do not have permission to add members to this chat'
+      });
+    }
+
+    // Check chat type - can't add members to direct chats
+    const chat = await prisma.chat.findUnique({
+      where: { id: chatId },
+      select: { type: true }
+    });
+
+    if (chat?.type === 'DIRECT') {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot add members to direct chats'
+      });
+    }
+
+    // Add new members
+    const newMembers = await prisma.chatMember.createMany({
+      data: memberIds.map((memberId: string) => ({
+        chatId: chatId,
+        userId: memberId,
+        role: 'MEMBER' as MemberRole
+      })),
+      skipDuplicates: true
+    });
+
+    // Get updated chat with all members
     const updatedChat = await prisma.chat.findUnique({
       where: { id: chatId },
       include: {
         members: {
-          where: { leftAt: null },
           include: {
             user: {
               select: {
                 id: true,
+                email: true,
                 username: true,
-                firstName: true,
-                lastName: true,
+                firstName: true,  // Added firstName
+                lastName: true,   // Added lastName
                 avatar: true,
                 isOnline: true,
                 lastSeen: true
@@ -507,144 +577,58 @@ router.post('/:chatId/members', authenticateToken, [
       }
     });
 
-    // Notify all members
-    updatedChat?.members.forEach(member => {
-      io.to(`user_${member.userId}`).emit('new_message', systemMessage);
-      io.to(`user_${member.userId}`).emit('chat_updated', updatedChat);
-    });
-
-    // Notify new members specifically
-    newMemberIds.forEach((memberId: string) => {
-      io.to(`user_${memberId}`).emit('new_chat', updatedChat);
-    });
-
-    res.json({ 
-      message: 'Members added successfully', 
-      chat: updatedChat,
-      addedMembers: addedUsers 
+    res.json({
+      success: true,
+      addedMembers: newMembers.count,
+      chat: updatedChat
     });
   } catch (error) {
-    console.error('Add members error:', error);
-    res.status(500).json({ error: 'Server error' });
+    console.error('Error adding members:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to add members'
+    });
   }
 });
 
 // Leave chat
-router.post('/:chatId/leave', authenticateToken, async (req: AuthRequest, res: Response) => {
+router.post('/:chatId/leave', auth, async (req: Request, res: Response) => {
   try {
+    const userId = (req as any).user.userId;
     const { chatId } = req.params;
-    const userId = req.user!.id;
 
+    // Check if user is a member
     const membership = await prisma.chatMember.findFirst({
       where: {
-        chatId,
-        userId,
-        leftAt: null
-      },
-      include: {
-        chat: {
-          select: { type: true, createdBy: true }
-        }
+        chatId: chatId,
+        userId: userId
       }
     });
 
     if (!membership) {
-      return res.status(404).json({ error: 'You are not a member of this chat' });
-    }
-
-    if (membership.chat.type === 'DIRECT') {
-      return res.status(400).json({ error: 'Cannot leave direct chat' });
-    }
-
-    // Update membership
-    await prisma.chatMember.update({
-      where: { id: membership.id },
-      data: { leftAt: new Date() }
-    });
-
-    // Create system message
-    const systemMessage = await prisma.message.create({
-      data: {
-        content: `${req.user!.firstName} ${req.user!.lastName} left the ${membership.chat.type.toLowerCase()}`,
-        type: 'SYSTEM',
-        chatId,
-        senderId: userId
-      },
-      include: {
-        sender: {
-          select: {
-            id: true,
-            username: true,
-            firstName: true,
-            lastName: true,
-            avatar: true
-          }
-        }
-      }
-    });
-
-    // Get remaining members
-    const remainingMembers = await prisma.chatMember.findMany({
-      where: {
-        chatId,
-        leftAt: null
-      },
-      select: { userId: true }
-    });
-
-    // Notify remaining members
-    remainingMembers.forEach(member => {
-      io.to(`user_${member.userId}`).emit('new_message', systemMessage);
-      io.to(`user_${member.userId}`).emit('member_left', {
-        chatId,
-        userId,
-        memberCount: remainingMembers.length
+      return res.status(404).json({
+        success: false,
+        error: 'You are not a member of this chat'
       });
-    });
+    }
 
-    res.json({ message: 'Left chat successfully' });
-  } catch (error) {
-    console.error('Leave chat error:', error);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// Pin/Unpin chat
-router.put('/:chatId/pin', authenticateToken, async (req: AuthRequest, res: Response) => {
-  try {
-    const { chatId } = req.params;
-    const userId = req.user!.id;
-
-    // Verify membership
-    const membership = await prisma.chatMember.findFirst({
+    // Remove the user from the chat
+    await prisma.chatMember.delete({
       where: {
-        chatId,
-        userId,
-        leftAt: null
+        id: membership.id
       }
     });
 
-    if (!membership) {
-      return res.status(404).json({ error: 'You are not a member of this chat' });
-    }
-
-    const chat = await prisma.chat.findUnique({
-      where: { id: chatId },
-      select: { isPinned: true }
-    });
-
-    const updatedChat = await prisma.chat.update({
-      where: { id: chatId },
-      data: { isPinned: !chat?.isPinned }
-    });
-
-    res.json({ 
-      message: `Chat ${updatedChat.isPinned ? 'pinned' : 'unpinned'} successfully`,
-      isPinned: updatedChat.isPinned 
+    res.json({
+      success: true,
+      message: 'Successfully left the chat'
     });
   } catch (error) {
-    console.error('Pin/Unpin chat error:', error);
-    res.status(500).json({ error: 'Server error' });
+    console.error('Error leaving chat:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to leave chat'
+    });
   }
 });
 
