@@ -62,7 +62,6 @@ router.post('/register', [
         firstName,
         lastName,
         password: hashedPassword
-        // role field'ını kaldırdık
       },
       select: {
         id: true,
@@ -73,11 +72,11 @@ router.post('/register', [
         avatar: true,
         isOnline: true,
         createdAt: true
-        // role field'ını select'ten de kaldırdık
       }
     });
 
-    const { accessToken, refreshToken } = generateTokens(user.id);
+    // DÜZELTME: generateTokens'e tüm gerekli bilgileri gönderiyoruz
+    const { accessToken, refreshToken } = generateTokens(user.id, user.email, user.username);
 
     res.status(201).json({
       success: true,
@@ -126,7 +125,6 @@ router.post('/login', [
         banReason: true,
         isOnline: true,
         lastSeen: true
-        // role field'ını select'ten kaldırdık
       }
     });
 
@@ -150,7 +148,8 @@ router.post('/login', [
       data: { isOnline: true, lastSeen: new Date() }
     });
 
-    const { accessToken, refreshToken } = generateTokens(user.id);
+    // DÜZELTME: generateTokens'e tüm gerekli bilgileri gönderiyoruz
+    const { accessToken, refreshToken } = generateTokens(user.id, user.email, user.username);
 
     const { password: _, ...userWithoutPassword } = user;
 

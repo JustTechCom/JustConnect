@@ -12,9 +12,18 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret') as any;
-    req.user = decoded;
+    
+    // DÜZELTME: Artık token'da id field'ı da var
+    // Geriye uyumluluk için hem id hem userId'yi kontrol ediyoruz
+    req.user = {
+      id: decoded.id || decoded.userId, // id varsa onu, yoksa userId'yi kullan
+      email: decoded.email,
+      username: decoded.username
+    };
+    
     next();
   } catch (error) {
+    console.error('JWT verification error:', error);
     return res.status(403).json({ error: 'Invalid token' });
   }
 };

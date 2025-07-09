@@ -1,14 +1,22 @@
 import jwt from 'jsonwebtoken';
 
-export const generateTokens = (userId: string) => {
+export const generateTokens = (userId: string, email?: string, username?: string) => {
+  // DÜZELTME: Token'da id field'ını kullanarak tutarlılık sağlıyoruz
+  const payload = {
+    id: userId,      // userId yerine id kullanıyoruz
+    userId,          // Geriye uyumluluk için
+    email,
+    username
+  };
+
   const accessToken = jwt.sign(
-    { userId },
+    payload,
     process.env.JWT_SECRET || 'fallback-secret',
     { expiresIn: '15m' }
   );
 
   const refreshToken = jwt.sign(
-    { userId },
+    payload,
     process.env.JWT_REFRESH_SECRET || 'fallback-refresh-secret',
     { expiresIn: '7d' }
   );
