@@ -6,7 +6,7 @@ import { generateTokens } from '../utils/auth';
 
 const router = express.Router();
 
-// Register - İyileştirilmiş validation mesajları ile
+// Register - Role field'ı olmadan
 router.post('/register', [
   body('email')
     .isEmail()
@@ -62,6 +62,7 @@ router.post('/register', [
         firstName,
         lastName,
         password: hashedPassword
+        // role field'ını kaldırdık
       },
       select: {
         id: true,
@@ -70,7 +71,9 @@ router.post('/register', [
         firstName: true,
         lastName: true,
         avatar: true,
+        isOnline: true,
         createdAt: true
+        // role field'ını select'ten de kaldırdık
       }
     });
 
@@ -92,7 +95,7 @@ router.post('/register', [
   }
 });
 
-// Login
+// Login - Role field'ı olmadan
 router.post('/login', [
   body('email').isEmail().normalizeEmail().withMessage('Geçerli bir e-posta adresi girin'),
   body('password').exists().withMessage('Şifre gerekli')
@@ -110,7 +113,21 @@ router.post('/login', [
     const { email, password } = req.body;
 
     const user = await prisma.user.findUnique({
-      where: { email }
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        firstName: true,
+        lastName: true,
+        avatar: true,
+        password: true,
+        banned: true,
+        banReason: true,
+        isOnline: true,
+        lastSeen: true
+        // role field'ını select'ten kaldırdık
+      }
     });
 
     if (!user || !(await bcrypt.compare(password, user.password))) {
@@ -135,17 +152,12 @@ router.post('/login', [
 
     const { accessToken, refreshToken } = generateTokens(user.id);
 
+    const { password: _, ...userWithoutPassword } = user;
+
     res.json({
       success: true,
       message: 'Giriş başarılı',
-      user: {
-        id: user.id,
-        email: user.email,
-        username: user.username,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        avatar: user.avatar
-      },
+      user: userWithoutPassword,
       accessToken,
       refreshToken
     });
