@@ -1,4 +1,4 @@
-// backend/src/routes/chats.ts - Fixed authentication references
+// backend/src/routes/chats.ts - Fixed Prisma type issues
 import { Router, Request, Response } from 'express';
 import { PrismaClient, ChatType, MemberRole } from '@prisma/client';
 import { authenticateToken } from '../middleware/auth';
@@ -9,7 +9,7 @@ const prisma = new PrismaClient();
 // Get user's chats
 router.get('/', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id; // ✅ FIXED: Use .id instead of .userId
+    const userId = (req as any).user.id;
 
     const chats = await prisma.chat.findMany({
       where: {
@@ -107,10 +107,10 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
   }
 });
 
-// Create a new chat
+// Create a new chat - FIXED: Prisma type issue
 router.post('/', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id; // ✅ FIXED: Use .id instead of .userId
+    const userId = (req as any).user.id;
     const { type, memberIds, name, description } = req.body;
     
     if (!userId) {
@@ -225,13 +225,14 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
       }
     }
 
-    // Create the chat
+    // FIXED: Create the chat with proper type structure
     const chat = await prisma.chat.create({
       data: {
         type: type as ChatType,
         name: name || null,
         description: description || null,
         createdBy: userId,
+        // FIXED: Use direct relation instead of nested create with connect
         members: {
           create: [
             {
@@ -243,9 +244,6 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
               role: 'MEMBER' as MemberRole
             }))
           ]
-        },
-        creator: {
-          connect: { id: userId }
         }
       },
       include: {
@@ -311,10 +309,10 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
   }
 });
 
-// Get specific chat
+// Get specific chat - FIXED: Ensure members are included in query
 router.get('/:chatId', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id; // ✅ FIXED: Use .id instead of .userId
+    const userId = (req as any).user.id;
     const { chatId } = req.params;
 
     const chat = await prisma.chat.findFirst({
@@ -374,6 +372,7 @@ router.get('/:chatId', authenticateToken, async (req: Request, res: Response) =>
       });
     }
 
+    // FIXED: Since we include members in the query, they will be available
     const transformedChat = {
       id: chat.id,
       name: chat.name,
@@ -420,7 +419,7 @@ router.get('/:chatId', authenticateToken, async (req: Request, res: Response) =>
 // Update chat
 router.put('/:chatId', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id; // ✅ FIXED: Use .id instead of .userId
+    const userId = (req as any).user.id;
     const { chatId } = req.params;
     const { name, description, avatar } = req.body;
 
@@ -516,7 +515,7 @@ router.put('/:chatId', authenticateToken, async (req: Request, res: Response) =>
 // Add members to chat
 router.post('/:chatId/members', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id; // ✅ FIXED: Use .id instead of .userId
+    const userId = (req as any).user.id;
     const { chatId } = req.params;
     const { memberIds } = req.body;
 
@@ -608,7 +607,7 @@ router.post('/:chatId/members', authenticateToken, async (req: Request, res: Res
 // Leave chat
 router.post('/:chatId/leave', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id; // ✅ FIXED: Use .id instead of .userId
+    const userId = (req as any).user.id;
     const { chatId } = req.params;
 
     // Check if user is a member

@@ -1,4 +1,4 @@
-// backend/src/app.ts - Enhanced Socket.IO configuration for production
+// backend/src/app.ts - Fixed Socket.io configuration
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -32,6 +32,14 @@ const corsOptions = {
   credentials: true,
 };
 
+// Socket.io configuration options - FIXED: Store config separately
+const socketConfig = {
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  maxHttpBufferSize: 1e8,
+  transports: ['websocket', 'polling']
+};
+
 // Enhanced Socket.IO configuration for production
 const io = new Server(server, {
   cors: {
@@ -45,10 +53,10 @@ const io = new Server(server, {
     credentials: false, // Set to false for better compatibility
   },
   allowEIO3: true, // Allow Engine.IO v3 clients
-  transports: ['websocket', 'polling'],
-  maxHttpBufferSize: 1e8,
-  pingTimeout: 60000,
-  pingInterval: 25000,
+  transports: socketConfig.transports,
+  maxHttpBufferSize: socketConfig.maxHttpBufferSize,
+  pingTimeout: socketConfig.pingTimeout,
+  pingInterval: socketConfig.pingInterval,
   cookie: false, // Disable cookies for better CORS compatibility
   // Additional configuration for production
   serveClient: false, // Don't serve the client files
@@ -102,16 +110,16 @@ app.get('/health', (req, res) => {
   res.json(healthCheck);
 });
 
-// Socket.IO health check
+// Socket.IO health check - FIXED: Use socketConfig instead of io.opts
 app.get('/socket-health', (req, res) => {
   const socketHealth = {
     status: 'OK',
     connectedClients: io.engine.clientsCount || 0,
     engineInfo: {
-      pingTimeout: io.opts.pingTimeout,
-      pingInterval: io.opts.pingInterval,
-      maxHttpBufferSize: io.opts.maxHttpBufferSize,
-      transports: io.opts.transports,
+      pingTimeout: socketConfig.pingTimeout,
+      pingInterval: socketConfig.pingInterval,
+      maxHttpBufferSize: socketConfig.maxHttpBufferSize,
+      transports: socketConfig.transports,
     },
     timestamp: new Date().toISOString(),
   };
