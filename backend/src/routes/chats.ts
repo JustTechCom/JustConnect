@@ -1,4 +1,4 @@
-// backend/src/routes/chats.ts - Fixed version
+// backend/src/routes/chats.ts - Fixed authentication references
 import { Router, Request, Response } from 'express';
 import { PrismaClient, ChatType, MemberRole } from '@prisma/client';
 import { authenticateToken } from '../middleware/auth';
@@ -9,7 +9,7 @@ const prisma = new PrismaClient();
 // Get user's chats
 router.get('/', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = (req as any).user.id; // ✅ FIXED: Use .id instead of .userId
 
     const chats = await prisma.chat.findMany({
       where: {
@@ -27,8 +27,8 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
                 id: true,
                 email: true,
                 username: true,
-                firstName: true,  // Added firstName
-                lastName: true,   // Added lastName
+                firstName: true,
+                lastName: true,
                 avatar: true,
                 isOnline: true,
                 lastSeen: true
@@ -46,8 +46,8 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
               select: {
                 id: true,
                 username: true,
-                firstName: true,  // Added firstName
-                lastName: true    // Added lastName
+                firstName: true,
+                lastName: true
               }
             }
           }
@@ -110,8 +110,9 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
 // Create a new chat
 router.post('/', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = (req as any).user.id; // ✅ FIXED: Use .id instead of .userId
     const { type, memberIds, name, description } = req.body;
+    
     if (!userId) {
       return res.status(401).json({ success: false, error: "User not authenticated" });
     }
@@ -134,6 +135,7 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
     if (memberIds.some(id => !id)) {
       return res.status(400).json({ success: false, error: "Invalid member ID in list" });
     }
+    
     // For direct chats, ensure only one other member
     if (type === 'DIRECT' && memberIds.length !== 1) {
       return res.status(400).json({
@@ -141,8 +143,10 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
         error: 'Direct chats must have exactly one other member'
       });
     }
+
     console.log('userId:', userId);
     console.log('memberIds:', memberIds);
+    
     // Check if direct chat already exists
     if (type === 'DIRECT') {
       const existingChat = await prisma.chat.findFirst({
@@ -173,8 +177,8 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
                   id: true,
                   email: true,
                   username: true,
-                  firstName: true,  // Added firstName
-                  lastName: true,   // Added lastName
+                  firstName: true,
+                  lastName: true,
                   avatar: true,
                   isOnline: true,
                   lastSeen: true
@@ -222,48 +226,47 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
     }
 
     // Create the chat
-const chat = await prisma.chat.create({
-  data: {
-    type: type as ChatType,
-    name: name || null,
-    description: description || null,
-    createdBy: userId,
-    members: {
-      create: [
-        {
-          userId: userId,
-          role: type === 'DIRECT' ? 'MEMBER' : 'ADMIN'
+    const chat = await prisma.chat.create({
+      data: {
+        type: type as ChatType,
+        name: name || null,
+        description: description || null,
+        createdBy: userId,
+        members: {
+          create: [
+            {
+              userId: userId,
+              role: type === 'DIRECT' ? 'MEMBER' : 'ADMIN'
+            },
+            ...memberIds.map((memberId: string) => ({
+              userId: memberId,
+              role: 'MEMBER' as MemberRole
+            }))
+          ]
         },
-        ...memberIds.map((memberId: string) => ({
-          userId: memberId,
-          role: 'MEMBER' as MemberRole
-        }))
-      ]
-    },
-    creator: {
-      connect: { id: userId }
-    }
-  },
-  include: {
-    members: {
+        creator: {
+          connect: { id: userId }
+        }
+      },
       include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            username: true,
-            firstName: true,
-            lastName: true,
-            avatar: true,
-            isOnline: true,
-            lastSeen: true
+        members: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                username: true,
+                firstName: true,
+                lastName: true,
+                avatar: true,
+                isOnline: true,
+                lastSeen: true
+              }
+            }
           }
         }
       }
-    }
-  }
-});
-
+    });
 
     const transformedChat = {
       id: chat.id,
@@ -311,7 +314,7 @@ const chat = await prisma.chat.create({
 // Get specific chat
 router.get('/:chatId', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = (req as any).user.id; // ✅ FIXED: Use .id instead of .userId
     const { chatId } = req.params;
 
     const chat = await prisma.chat.findFirst({
@@ -331,8 +334,8 @@ router.get('/:chatId', authenticateToken, async (req: Request, res: Response) =>
                 id: true,
                 email: true,
                 username: true,
-                firstName: true,  // Added firstName
-                lastName: true,   // Added lastName
+                firstName: true,
+                lastName: true,
                 avatar: true,
                 isOnline: true,
                 lastSeen: true
@@ -350,8 +353,8 @@ router.get('/:chatId', authenticateToken, async (req: Request, res: Response) =>
               select: {
                 id: true,
                 username: true,
-                firstName: true,  // Added firstName
-                lastName: true    // Added lastName
+                firstName: true,
+                lastName: true
               }
             }
           }
@@ -417,7 +420,7 @@ router.get('/:chatId', authenticateToken, async (req: Request, res: Response) =>
 // Update chat
 router.put('/:chatId', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = (req as any).user.id; // ✅ FIXED: Use .id instead of .userId
     const { chatId } = req.params;
     const { name, description, avatar } = req.body;
 
@@ -455,8 +458,8 @@ router.put('/:chatId', authenticateToken, async (req: Request, res: Response) =>
                 id: true,
                 email: true,
                 username: true,
-                firstName: true,  // Added firstName
-                lastName: true,   // Added lastName
+                firstName: true,
+                lastName: true,
                 avatar: true,
                 isOnline: true,
                 lastSeen: true
@@ -513,7 +516,7 @@ router.put('/:chatId', authenticateToken, async (req: Request, res: Response) =>
 // Add members to chat
 router.post('/:chatId/members', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = (req as any).user.id; // ✅ FIXED: Use .id instead of .userId
     const { chatId } = req.params;
     const { memberIds } = req.body;
 
@@ -576,8 +579,8 @@ router.post('/:chatId/members', authenticateToken, async (req: Request, res: Res
                 id: true,
                 email: true,
                 username: true,
-                firstName: true,  // Added firstName
-                lastName: true,   // Added lastName
+                firstName: true,
+                lastName: true,
                 avatar: true,
                 isOnline: true,
                 lastSeen: true
@@ -605,7 +608,7 @@ router.post('/:chatId/members', authenticateToken, async (req: Request, res: Res
 // Leave chat
 router.post('/:chatId/leave', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = (req as any).user.id; // ✅ FIXED: Use .id instead of .userId
     const { chatId } = req.params;
 
     // Check if user is a member

@@ -1,4 +1,4 @@
-// backend/src/routes/users.ts - Fixed version
+// backend/src/routes/users.ts - Fixed authentication references
 import { Router, Request, Response } from 'express';
 import { PrismaClient, FriendshipStatus } from '@prisma/client';
 import bcrypt from 'bcryptjs';
@@ -38,7 +38,7 @@ const upload = multer({
 // Get current user
 router.get('/me', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = (req as any).user.id; // ✅ FIXED: Use .id instead of .userId
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -80,7 +80,7 @@ router.get('/me', authenticateToken, async (req: Request, res: Response) => {
 // Update user profile
 router.put('/profile', authenticateToken, upload.single('avatar'), async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = (req as any).user.id; // ✅ FIXED: Use .id instead of .userId
     const { firstName, lastName, bio } = req.body;
 
     const updateData: any = {};
@@ -260,7 +260,7 @@ router.get('/:userId', authenticateToken, async (req: Request, res: Response) =>
 // Send friend request
 router.post('/friend-request', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = (req as any).user.id; // ✅ FIXED: Use .id instead of .userId
     const { userId: targetUserId } = req.body;
 
     if (!targetUserId) {
@@ -352,7 +352,7 @@ router.post('/friend-request', authenticateToken, async (req: Request, res: Resp
 // Get friend requests
 router.get('/friend-requests', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = (req as any).user.id; // ✅ FIXED: Use .id instead of .userId
     const { type = 'received' } = req.query;
 
     let friendRequests;
@@ -361,7 +361,7 @@ router.get('/friend-requests', authenticateToken, async (req: Request, res: Resp
       friendRequests = await prisma.friendship.findMany({
         where: {
           requesterId: userId,
-          status: FriendshipStatus.PENDING // Fixed: Use enum instead of string
+          status: FriendshipStatus.PENDING
         },
         include: {
           addressee: {
@@ -384,7 +384,7 @@ router.get('/friend-requests', authenticateToken, async (req: Request, res: Resp
       friendRequests = await prisma.friendship.findMany({
         where: {
           addresseeId: userId,
-          status: FriendshipStatus.PENDING // Fixed: Use enum instead of string
+          status: FriendshipStatus.PENDING
         },
         include: {
           requester: {
@@ -421,7 +421,7 @@ router.get('/friend-requests', authenticateToken, async (req: Request, res: Resp
 // Respond to friend request
 router.put('/friend-request/:friendshipId', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = (req as any).user.id; // ✅ FIXED: Use .id instead of .userId
     const { friendshipId } = req.params;
     const { action } = req.body; // 'accept' or 'reject'
 
@@ -437,7 +437,7 @@ router.put('/friend-request/:friendshipId', authenticateToken, async (req: Reque
       where: {
         id: friendshipId,
         addresseeId: userId,
-        status: FriendshipStatus.PENDING // Fixed: Use enum instead of string
+        status: FriendshipStatus.PENDING
       },
       include: {
         requester: {
@@ -505,7 +505,7 @@ router.put('/friend-request/:friendshipId', authenticateToken, async (req: Reque
 // Get friends list
 router.get('/friends', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = (req as any).user.id; // ✅ FIXED: Use .id instead of .userId
 
     const friendships = await prisma.friendship.findMany({
       where: {
@@ -513,7 +513,7 @@ router.get('/friends', authenticateToken, async (req: Request, res: Response) =>
           { requesterId: userId },
           { addresseeId: userId }
         ],
-        status: FriendshipStatus.ACCEPTED // Fixed: Use enum instead of string
+        status: FriendshipStatus.ACCEPTED
       },
       include: {
         requester: {
@@ -564,7 +564,7 @@ router.get('/friends', authenticateToken, async (req: Request, res: Response) =>
 // Remove friend
 router.delete('/friends/:friendId', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = (req as any).user.id; // ✅ FIXED: Use .id instead of .userId
     const { friendId } = req.params;
 
     // Find and delete the friendship
@@ -574,7 +574,7 @@ router.delete('/friends/:friendId', authenticateToken, async (req: Request, res:
           { requesterId: userId, addresseeId: friendId },
           { requesterId: friendId, addresseeId: userId }
         ],
-        status: FriendshipStatus.ACCEPTED // Fixed: Use enum instead of string
+        status: FriendshipStatus.ACCEPTED
       }
     });
 
@@ -605,7 +605,7 @@ router.delete('/friends/:friendId', authenticateToken, async (req: Request, res:
 // Upload avatar
 router.post('/avatar', authenticateToken, upload.single('avatar'), async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = (req as any).user.id; // ✅ FIXED: Use .id instead of .userId
 
     if (!req.file) {
       return res.status(400).json({
