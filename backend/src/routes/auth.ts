@@ -168,7 +168,106 @@ router.post('/login', [
     });
   }
 });
+router.post('/refresh', [
+  body('refreshToken').notEmpty().withMessage('Refresh token gerekli')
+], async (req: Request, res: Response) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Validation hatası',
+        errors: errors.array() 
+      });
+    }
 
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return res.status(401).json({ 
+        success: false,
+        error: 'Refresh token gerekli' 
+      });
+    }
+
+    try {
+      // Refresh token'ı doğrula
+      const decoded = jwt.verify(
+        refreshToken, 
+        process.env.JWT_REFRESH_SECRET || 'fallback-refresh-secret'
+      ) as { id: string; email: string; username: string };
+
+      // Kullanıcının varlığını ve durumunu kontrol et
+      const user = await prisma.user.findUnique({
+        where: { id: decoded.id },
+        select: {
+          id: true,
+          email: true,
+          username: true,
+          firstName: true,
+          lastName: true,
+          avatar: true,
+          banned: true,
+          banReason: true,
+          isOnline: true,
+          lastSeen: true
+        }
+      });
+
+      if (!user) {
+        return res.status(401).json({ 
+          success: false,
+          error: 'Kullanıcı bulunamadı' 
+        });
+      }
+
+      if (user.banned) {
+        return res.status(403).json({ 
+          success: false,
+          error: user.banReason || 'Hesabınız askıya alınmıştır' 
+        });
+      }
+
+      // Yeni token'lar oluştur
+      const { accessToken, refreshToken: newRefreshToken } = generateTokens(
+        user.id, 
+        user.email, 
+        user.username
+      );
+
+      // Kullanıcı aktivitesini güncelle
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { 
+          isOnline: true, 
+          lastSeen: new Date() 
+        }
+      });
+
+      res.json({
+        success: true,
+        message: 'Token yenilendi',
+        accessToken,
+        refreshToken: newRefreshToken,
+        user
+      });
+
+    } catch (jwtError) {
+      console.error('JWT verification error:', jwtError);
+      return res.status(401).json({ 
+        success: false,
+        error: 'Geçersiz veya süresi dolmuş refresh token' 
+      });
+    }
+
+  } catch (error) {
+    console.error('Refresh token error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Sunucu hatası' 
+    });
+  }
+});
 // Logout
 router.post('/logout', async (req: Request, res: Response) => {
   try {
