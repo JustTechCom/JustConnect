@@ -7,59 +7,100 @@ const router = Router();
 const prisma = new PrismaClient();
 
 // Get user's chats
-router.get('/', authenticateToken, async (req: Request, res: Response) => {
+router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
 
     const chats = await prisma.chat.findMany({
-  where: {
-    members: {
-      some: {
-        userId: req.user!.id
-      }
-    }
-  },
-  include: {
-    members: {
+      where: {
+        members: {
+          some: { 
+            userId,
+            leftAt: null 
+          }
+        },
+        isArchived: false
+      },
       include: {
-        user: {
-          select: {
-            id: true,
-            username: true,
-            firstName: true,
-            lastName: true,
-            avatar: true,
-            isOnline: true,
-            lastSeen: true,
-            verified: true
+        members: {
+          where: { leftAt: null },
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                firstName: true,
+                lastName: true,
+                avatar: true,
+                isOnline: true,
+                lastSeen: true
+              }
+            }
+          }
+        },
+        // ✅ messages relation'ı - doğru kullanım
+        messages: {
+          take: 1,
+          orderBy: { createdAt: 'desc' },
+          include: {
+            sender: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                avatar: true
+              }
+            }
+          }
+        },
+        // ✅ _count doğru kullanım
+        _count: {
+          select: { 
+            messages: {
+              where: {
+                isDeleted: false
+              }
+            }
           }
         }
-      }
-    },
-    lastMessage: {
-      include: {
-        sender: {
-          select: {
-            id: true,
-            username: true,
-            firstName: true,
-            lastName: true,
-            avatar: true
-          }
-        }
-      }
-    },
-    _count: {
-      select: {
-        messages: true
-      }
-    }
-  },
-  orderBy: {
-    updatedAt: 'desc'
-  }
-});
+        // ❌ lastMessage KALDIRILDI - Chat model'inde relation değil, string field
+      },
+      orderBy: [
+        { isPinned: 'desc' },
+        { lastMessageAt: 'desc' },
+        { createdAt: 'desc' }
+      ]
+    });
 
+  // Get unread message counts for each chat
+    const chatsWithUnread = await Promise.all(
+      chats.map(async (chat) => {
+        const unreadCount = await prisma.message.count({
+          where: {
+            chatId: chat.id,
+            senderId: { not: userId },
+            read: false,
+            isDeleted: false
+          }
+        });
+
+        // Get the other user's info for direct chats
+        let otherUser = null;
+        if (chat.type === 'DIRECT') {
+          const otherMember = chat.members.find(member => member.userId !== userId);
+          if (otherMember) {
+            otherUser = otherMember.user;
+          }
+        }
+ return {
+          ...chat,
+          unreadCount,
+          otherUser,
+          // ✅ En son mesajı messages array'inden al
+          lastMessageObject: chat.messages[0] || null
+        };
+      })
+    );
     // Transform the data
     const transformedChats = chats.map(chat => ({
       id: chat.id,
@@ -91,16 +132,10 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
       }))
     }));
 
-    res.json({
-      success: true,
-      chats: transformedChats
-    });
+     res.json({ chats: chatsWithUnread });
   } catch (error) {
-    console.error('Error fetching chats:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch chats'
-    });
+    console.error('Get chats error:', error);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
