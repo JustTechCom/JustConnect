@@ -1,4 +1,4 @@
-// frontend/src/components/Messages/MessageItem.tsx - Düzeltilmiş ve Güvenli Versiyon
+// frontend/src/components/Messages/MessageItem.tsx - Hooks Kuralları Düzeltilmiş
 import React, { useState, useRef, useEffect } from 'react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { tr } from 'date-fns/locale';
@@ -50,12 +50,7 @@ const MessageItem: React.FC<MessageItemProps> = ({
   onDelete,
   onReaction
 }) => {
-  // ✅ GÜVENLİK KONTROLLERİ
-  if (!message || !message.id || !currentUser || !currentUser.id) {
-    console.warn('MessageItem: Invalid props', { message, currentUser });
-    return null;
-  }
-
+  // ✅ HOOKS MUST BE CALLED FIRST - Before any conditional logic
   const [isHovered, setIsHovered] = useState(false);
   const [showActions, setShowActions] = useState(false);
   const [showReactions, setShowReactions] = useState(false);
@@ -66,7 +61,22 @@ const MessageItem: React.FC<MessageItemProps> = ({
   const messageRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  // ✅ GÜVENLİ PROPERTY ERİŞİMİ
+  // Animation delay based on message position
+  const animationDelay = Math.random() * 200;
+
+  useEffect(() => {
+    if (messageRef.current) {
+      messageRef.current.style.animationDelay = `${animationDelay}ms`;
+    }
+  }, [animationDelay]);
+
+  // ✅ NOW DO SAFETY CHECKS AFTER HOOKS
+  if (!message || !message.id || !currentUser || !currentUser.id) {
+    console.warn('MessageItem: Invalid props', { message, currentUser });
+    return <div className="text-sm text-gray-500 p-2">Invalid message data</div>;
+  }
+
+  // ✅ SAFE PROPERTY ACCESS
   const sender = message.sender || {
     id: 'unknown',
     username: 'unknown',
@@ -80,15 +90,6 @@ const MessageItem: React.FC<MessageItemProps> = ({
   const showSenderName = isGroupChat && !isOwnMessage && (!previousMessage || previousMessage.sender?.id !== sender.id);
   const isConsecutive = previousMessage?.sender?.id === sender.id;
   const isLastInGroup = !nextMessage || nextMessage.sender?.id !== sender.id;
-
-  // Animation delay based on message position
-  const animationDelay = Math.random() * 200;
-
-  useEffect(() => {
-    if (messageRef.current) {
-      messageRef.current.style.animationDelay = `${animationDelay}ms`;
-    }
-  }, [animationDelay]);
 
   const formatMessageTime = (date: Date | string) => {
     try {
@@ -111,7 +112,7 @@ const MessageItem: React.FC<MessageItemProps> = ({
 
     const iconProps = { className: "w-3 h-3" };
     
-    // ✅ Güvenli status kontrolü
+    // ✅ Safe status control
     const status = message.read ? 'read' : message.delivered ? 'delivered' : 'sent';
     
     switch (status) {
@@ -273,7 +274,7 @@ const MessageItem: React.FC<MessageItemProps> = ({
     }
   };
 
-  // ✅ Güvenli reply message kontrolü
+  // ✅ Safe reply message control
   const replyToMessage = message.replyToMessage || (message as any).replyTo;
 
   return (
