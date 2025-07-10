@@ -155,6 +155,8 @@ class SocketService {
   });
   }
 
+  
+
   private handleReconnect(): void {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       console.log('❌ Max reconnection attempts reached');
