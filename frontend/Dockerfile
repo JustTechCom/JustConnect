@@ -52,8 +52,8 @@ RUN curl -o public/default-group-avatar.png "https://ui-avatars.com/api/?name=Gr
     cp public/default-avatar.png public/default-group-avatar.png
 
 # Build arguments
-ARG REACT_APP_API_URL=http://localhost:5000/api
-ARG REACT_APP_SOCKET_URL=http://localhost:5000
+ARG REACT_APP_API_URL=https://justconnect-o8k8.onrender.com/api
+ARG REACT_APP_SOCKET_URL=https://justconnect-o8k8.onrender.com
 ARG REACT_APP_ENVIRONMENT=production
 
 # Set environment variables - DISABLE STRICT CHECKING
