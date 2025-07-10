@@ -1,4 +1,6 @@
-import React, { useEffect, useRef } from 'react';
+// frontend/src/components/Chat/ChatArea.tsx - Düzeltilmiş versiyon
+
+import React, { useEffect, useRef, useMemo } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../../store';
 import { fetchMessages } from '../../store/slices/messageSlice';
@@ -12,7 +14,7 @@ interface ChatAreaProps {
   chat: Chat;
 }
 
-const ChatArea: React.FC<ChatAreaProps> = ({ chat }) => {
+const ChatArea: React.FC<ChatAreaProps> = React.memo(({ chat }) => {
   const dispatch = useDispatch();
   const { 
     messages, 
@@ -21,42 +23,43 @@ const ChatArea: React.FC<ChatAreaProps> = ({ chat }) => {
     currentPage 
   } = useSelector((state: RootState) => state.messages);
   
-  const chatMessages = messages[chat.id] || [];
-  const hasMoreMessages = hasMore[chat.id] || false;
-  const page = currentPage[chat.id] || 1;
+  // Memoize chat-specific data
+  const chatData = useMemo(() => ({
+    messages: messages[chat.id] || [],
+    hasMore: hasMore[chat.id] || false,
+    page: currentPage[chat.id] || 1
+  }), [messages, hasMore, currentPage, chat.id]);
 
-  const { ref: messagesEndRef, scrollToBottom } = useScrollToBottom([chatMessages]);
+  const { ref: messagesEndRef, scrollToBottom } = useScrollToBottom([chatData.messages]);
 
   useEffect(() => {
     // Fetch initial messages when chat changes
-    if (chat.id && (!chatMessages.length || chatMessages.length === 0)) {
+    if (chat.id && chatData.messages.length === 0) {
       dispatch(fetchMessages({ chatId: chat.id, page: 1 }));
     }
-  }, [chat.id, dispatch]);
+  }, [chat.id, dispatch, chatData.messages.length]);
 
-  const handleLoadMore = () => {
-    if (!isLoading && hasMoreMessages) {
-      dispatch(fetchMessages({ chatId: chat.id, page: page + 1 }));
+  const handleLoadMore = useCallback(() => {
+    if (!isLoading && chatData.hasMore) {
+      dispatch(fetchMessages({ chatId: chat.id, page: chatData.page + 1 }));
     }
-  };
+  }, [isLoading, chatData.hasMore, chatData.page, dispatch, chat.id]);
 
-  const handleSendMessage = (content: string, replyTo?: string) => {
-    // Message sending is handled by MessageInput component
-    // This triggers the socket event and the message appears via real-time updates
-  };
+  // Debug log to check if component renders multiple times
+  console.log('ChatArea render:', chat.id, chat.name);
 
   return (
     <div className="h-full flex flex-col bg-gray-50 dark:bg-gray-900">
-      {/* Chat Header */}
-      <ChatHeader chat={chat} />
+      {/* Chat Header - sadece bir kez render et */}
+      <ChatHeader key={`header-${chat.id}`} chat={chat} />
 
       {/* Messages Area */}
       <div className="flex-1 flex flex-col min-h-0">
         <MessageList
-          messages={chatMessages}
+          messages={chatData.messages}
           chat={chat}
           isLoading={isLoading}
-          hasMore={hasMoreMessages}
+          hasMore={chatData.hasMore}
           onLoadMore={handleLoadMore}
         />
         <div ref={messagesEndRef} />
@@ -64,11 +67,14 @@ const ChatArea: React.FC<ChatAreaProps> = ({ chat }) => {
 
       {/* Message Input */}
       <MessageInput 
+        key={`input-${chat.id}`}
         chatId={chat.id} 
         onScrollToBottom={scrollToBottom}
       />
     </div>
   );
-};
+});
+
+ChatArea.displayName = 'ChatArea';
 
 export default ChatArea;
