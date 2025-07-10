@@ -72,40 +72,33 @@ const MessageInput: React.FC<MessageInputProps> = ({
   };
 
   const handleSendMessage = async () => {
-    if (!message.trim() || isSending) return;
+  if (!message.trim() || isSending) return;
 
-    const messageContent = message.trim();
-    setMessage('');
-    stopTyping();
+  const messageContent = message.trim();
+  setMessage('');
+  stopTyping();
 
-    try {
-      // Send via socket for real-time delivery
-      socketService.sendMessage({
-        chatId,
-        content: messageContent,
-        type: 'TEXT',
-        replyTo: replyTo?.id
-      });
+  try {
+    // SADECE socket ile gönder - API çağrısını kaldır
+    // Çünkü backend socket handler'ı zaten DB'ye kaydediyor
+    socketService.sendMessage({
+      chatId,
+      content: messageContent,
+      type: 'TEXT',
+      replyTo: replyTo?.id
+    });
 
-      // Also send via API for persistence
-      await dispatch(sendMessage({
-        chatId,
-        content: messageContent,
-        type: 'TEXT',
-        replyTo: replyTo?.id
-      }));
-
-      onScrollToBottom();
-      
-      if (onCancelReply) {
-        onCancelReply();
-      }
-    } catch (error) {
-      // Restore message on error
-      setMessage(messageContent);
-      console.error('Failed to send message:', error);
+    onScrollToBottom();
+    
+    if (onCancelReply) {
+      onCancelReply();
     }
-  };
+  } catch (error) {
+    // Restore message on error
+    setMessage(messageContent);
+    console.error('Failed to send message:', error);
+  }
+};
 
   const handleEmojiSelect = (emoji: string) => {
     const textarea = textareaRef.current;

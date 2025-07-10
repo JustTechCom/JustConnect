@@ -176,16 +176,18 @@ class SocketService {
     }, delay);
   }
 
-  disconnect(): void {
-    console.log('🔌 Manually disconnecting socket');
-    if (this.socket) {
-      this.socket.disconnect();
-      this.socket = null;
-    }
-    this.clearAllTypingTimeouts();
-    this.isConnecting = false;
-    this.reconnectAttempts = 0;
+disconnect(): void {
+  if (this.socket) {
+    // Event listener'ları temizle
+    this.socket.removeAllListeners();
+    this.socket.disconnect();
+    this.socket = null;
   }
+  this.clearAllTypingTimeouts();
+  this.connectionCallbacks = [];
+  this.isConnecting = false;
+  this.reconnectAttempts = 0;
+}
 
   
   // Test connection method
@@ -209,66 +211,80 @@ class SocketService {
     }
   }
 
-  private setupEventListeners(): void {
-    if (!this.socket) return;
+private setupEventListeners(): void {
+  if (!this.socket) return;
 
-    // Connection events
-    this.socket.on('connected', (data) => {
-      console.log('✅ Connected successfully:', data);
-    });
+  // Önce eski listener'ları temizle
+  this.socket.removeAllListeners();
 
-    this.socket.on('chats_joined', (data) => {
-      console.log('📱 Joined chats:', data);
-    });
+  // Connection events
+  this.socket.on('disconnect', (reason) => {
+    console.log('🔌 Disconnected from server:', reason);
+    
+    if (reason === 'io server disconnect') {
+      this.handleReconnect();
+    }
+  });
 
-    // Error events
-    this.socket.on('error', (data: { message: string }) => {
-      console.error('🚨 Socket error:', data.message);
+  this.socket.on('connected', (data) => {
+    console.log('✅ Connected successfully:', data);
+  });
+
+  // Chat events
+  this.socket.on('chats_joined', (data) => {
+    console.log('📱 Joined chats:', data);
+  });
+
+  // Message events - sadece bir kez ekle
+  this.socket.off('new_message'); // Önce kaldır
+  this.socket.on('new_message', (message: Message) => {
+    console.log('📨 New message received:', message);
+    
+    store.dispatch(addMessage(message));
+    store.dispatch(updateChatLastMessage({
+      chatId: message.chatId,
+      message: message.content,
+      timestamp: message.createdAt.toString(),
+      senderId: message.senderId
+    }));
+
+    // Notification logic...
+    const state = store.getState();
+    const currentUserId = state.auth.user?.id;
+    const activeChat = state.chats.activeChat;
+    
+    if (message.senderId !== currentUserId) {
+      this.playNotificationSound();
       
-      store.dispatch(addNotification({
-        type: 'error',
-        title: 'Error',
-        message: data.message,
-      }));
-    });
-
-    // Message events (keeping existing logic)
-    this.socket.on('new_message', (message: Message) => {
-      console.log('📨 New message received:', message);
-      
-      store.dispatch(addMessage(message));
-      store.dispatch(updateChatLastMessage({
-        chatId: message.chatId,
-        message: message.content,
-        timestamp: message.createdAt.toString(),
-        senderId: message.senderId
-      }));
-
-      // Show notification logic (existing)
-      const state = store.getState();
-      const currentUserId = state.auth.user?.id;
-      const activeChat = state.chats.activeChat;
-      
-      if (message.senderId !== currentUserId) {
-        this.playNotificationSound();
+      if (!activeChat || activeChat.id !== message.chatId) {
+        this.showBrowserNotification(
+          `${message.sender.firstName} ${message.sender.lastName}`,
+          message.content,
+          message.sender.avatar
+        );
         
-        if (!activeChat || activeChat.id !== message.chatId) {
-          this.showBrowserNotification(
-            `${message.sender.firstName} ${message.sender.lastName}`,
-            message.content,
-            message.sender.avatar
-          );
-          
-          store.dispatch(addNotification({
-            type: 'info',
-            title: `${message.sender.firstName} ${message.sender.lastName}`,
-            message: message.content,
-          }));
-        }
-
-        this.markMessageAsDelivered(message.id, message.chatId);
+        store.dispatch(addNotification({
+          type: 'info',
+          title: `${message.sender.firstName} ${message.sender.lastName}`,
+          message: message.content,
+        }));
       }
-    });
+
+      this.markMessageAsDelivered(message.id, message.chatId);
+    }
+  });
+
+   this.socket.off('message_sent');
+  this.socket.on('message_sent', (data: { tempId?: string; message: Message }) => {
+    console.log('✅ Message sent confirmation:', data);
+    
+    if (data.tempId) {
+      store.dispatch(replaceTempMessage({
+        tempId: data.tempId,
+        realMessage: data.message
+      }));
+    }
+  });
 
     // Add all other existing event listeners here...
     // (keeping the existing implementation for brevity)
