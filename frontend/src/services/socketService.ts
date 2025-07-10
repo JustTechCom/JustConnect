@@ -60,7 +60,7 @@ class SocketService {
 
  // frontend/src/services/socketService.ts - Render için güncellenmiş connect fonksiyonu
 
-connect(token: string): Promise<void> {
+  connect(token: string): Promise<void> {
   return new Promise((resolve, reject) => {
     if (this.socket?.connected) {
       resolve();
@@ -153,26 +153,26 @@ connect(token: string): Promise<void> {
       console.log('❌ Upgrade failed:', error);
     });
   });
-}
-
-private handleReconnect(): void {
-  if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-    console.log('❌ Max reconnection attempts reached');
-    return;
   }
 
-  this.reconnectAttempts++;
-  const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
-  
-  console.log(`🔄 Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts}) in ${delay}ms`);
-  
-  setTimeout(() => {
-    if (this.socket && !this.socket.connected) {
-      console.log('🔌 Attempting reconnection...');
-      this.socket.connect();
+  private handleReconnect(): void {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.log('❌ Max reconnection attempts reached');
+      return;
     }
-  }, delay);
-}
+
+    this.reconnectAttempts++;
+    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
+
+    console.log(`🔄 Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts}) in ${delay}ms`);
+
+    setTimeout(() => {
+      if (this.socket && !this.socket.connected) {
+        console.log('🔌 Attempting reconnection...');
+        this.socket.connect();
+      }
+    }, delay);
+  }
 
   disconnect(): void {
     console.log('🔌 Manually disconnecting socket');
@@ -185,33 +185,7 @@ private handleReconnect(): void {
     this.reconnectAttempts = 0;
   }
 
-  private handleReconnect(): void {
-    if (this.reconnectAttempts < this.maxReconnectAttempts) {
-      this.reconnectAttempts++;
-      const delay = Math.pow(2, this.reconnectAttempts) * 1000;
-      
-      console.log(`🔄 Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts}) in ${delay}ms`);
-      
-      setTimeout(() => {
-        const token = localStorage.getItem('accessToken');
-        if (token) {
-          this.connect(token).catch((error) => {
-            console.error('🔄 Reconnection failed:', error);
-          });
-        } else {
-          console.error('❌ No auth token available for reconnection');
-        }
-      }, delay);
-    } else {
-      console.error('❌ Max reconnection attempts reached');
-      store.dispatch(addNotification({
-        type: 'error',
-        title: 'Connection Lost',
-        message: 'Unable to connect to server. Please refresh the page.',
-      }));
-    }
-  }
-
+  
   // Test connection method
   async testConnection(): Promise<boolean> {
     try {
