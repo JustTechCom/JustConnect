@@ -160,23 +160,55 @@ export const chatAPI = {
 };
 
 export const messageAPI = {
-  getMessages: (chatId: string, page: number = 1, limit: number = 50) =>
-    api.get(`/messages/chat/${chatId}`, { 
-      params: { page, limit } 
-    }),
+  getMessages: (chatId: string, options?: { 
+    page?: number; 
+    limit?: number; 
+    before?: string;
+  }) => {
+    console.log('🔍 API: Getting messages for chat:', chatId, options);
+    
+    // DÜZELTME: URLSearchParams yerine direkt query string oluştur
+    const queryParams: string[] = [];
+    
+    if (options?.page) {
+      queryParams.push(`page=${options.page}`);
+    }
+    if (options?.limit) {
+      queryParams.push(`limit=${options.limit}`);
+    }
+    if (options?.before) {
+      queryParams.push(`before=${encodeURIComponent(options.before)}`);
+    }
+    
+    const queryString = queryParams.length > 0 ? '?' + queryParams.join('&') : '';
+    const url = `/messages/chat/${chatId}${queryString}`;
+    
+    console.log('🌐 API URL:', url);
+    console.log('🔑 Token exists:', !!localStorage.getItem('accessToken'));
+    
+    return api.get(url);
+  },
   
-  sendMessage: (data: {
+  sendMessage: (messageData: {
     chatId: string;
     content: string;
     type?: string;
     replyTo?: string;
-  }) => api.post('/messages', data),
+    fileId?: string;
+    tempId?: string;
+  }) => {
+    console.log('📤 API: Sending message:', messageData);
+    return api.post('/messages', messageData);
+  },
   
   editMessage: (messageId: string, content: string) =>
     api.put(`/messages/${messageId}`, { content }),
   
   deleteMessage: (messageId: string) =>
     api.delete(`/messages/${messageId}`),
+  
+  markAsRead: (chatId: string, messageIds: string[]) =>
+    api.post('/messages/mark-read', { chatId, messageIds }),
 };
 
 export default api;

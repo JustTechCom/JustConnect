@@ -9,13 +9,40 @@ import { io } from '../app';
 const router = express.Router();
 
 // Get messages for a chat with pagination
+// backend/src/routes/messages.ts - Enhanced error handling
+
+// Get messages for a chat with pagination
 router.get('/chat/:chatId', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const { chatId } = req.params;
     const { page = 1, limit = 50, before } = req.query;
     const userId = req.user!.id;
 
+    console.log('📨 Fetching messages:', {
+      chatId,
+      userId,
+      page,
+      limit,
+      before,
+      query: req.query
+    });
+
+    // Validate parameters
+    const pageNum = Number(page);
+    const limitNum = Number(limit);
+    
+    if (isNaN(pageNum) || pageNum < 1) {
+      console.error('❌ Invalid page parameter:', page);
+      return res.status(400).json({ error: 'Invalid page parameter' });
+    }
+    
+    if (isNaN(limitNum) || limitNum < 1 || limitNum > 100) {
+      console.error('❌ Invalid limit parameter:', limit);
+      return res.status(400).json({ error: 'Invalid limit parameter (1-100)' });
+    }
+
     // Verify user is a member of the chat
+    console.log('🔍 Checking chat membership...');
     const membership = await prisma.chatMember.findFirst({
       where: {
         chatId,
@@ -25,8 +52,11 @@ router.get('/chat/:chatId', authenticateToken, async (req: AuthRequest, res: Res
     });
 
     if (!membership) {
+      console.error('❌ User not member of chat:', { chatId, userId });
       return res.status(403).json({ error: 'You are not a member of this chat' });
     }
+
+    console.log('✅ User is member of chat');
 
     // Build query filters
     const where: any = {
@@ -38,6 +68,9 @@ router.get('/chat/:chatId', authenticateToken, async (req: AuthRequest, res: Res
       where.createdAt = { lt: new Date(before as string) };
     }
 
+    console.log('🔍 Database query where clause:', where);
+
+    // Get messages with detailed error handling
     const messages = await prisma.message.findMany({
       where,
       include: {
@@ -81,45 +114,87 @@ router.get('/chat/:chatId', authenticateToken, async (req: AuthRequest, res: Res
         }
       },
       orderBy: { createdAt: 'desc' },
-      take: Number(limit),
-      skip: before ? 0 : (Number(page) - 1) * Number(limit)
+      take: limitNum,
+      skip: before ? 0 : (pageNum - 1) * limitNum
+    });
+
+    console.log('✅ Messages fetched successfully:', {
+      count: messages.length,
+      chatId,
+      userId
     });
 
     // Mark messages as delivered for the requesting user
-    const undeliveredMessages = messages
-      .filter(msg => msg.senderId !== userId && !msg.delivered)
-      .map(msg => msg.id);
+    try {
+      const undeliveredMessages = messages
+        .filter(msg => msg.senderId !== userId && !msg.delivered)
+        .map(msg => msg.id);
 
-    if (undeliveredMessages.length > 0) {
-      await prisma.message.updateMany({
-        where: {
-          id: { in: undeliveredMessages }
-        },
-        data: { delivered: true }
-      });
-
-      // Notify senders about delivery status
-      const senderIds = messages
-        .filter(msg => undeliveredMessages.includes(msg.id))
-        .map(msg => msg.senderId);
-
-      [...new Set(senderIds)].forEach(senderId => {
-        io.to(`user_${senderId}`).emit('messages_delivered', {
-          chatId,
-          messageIds: undeliveredMessages,
-          deliveredBy: userId
+      if (undeliveredMessages.length > 0) {
+        console.log('📬 Marking messages as delivered:', undeliveredMessages.length);
+        
+        await prisma.message.updateMany({
+          where: {
+            id: { in: undeliveredMessages }
+          },
+          data: { delivered: true }
         });
-      });
+
+        // Notify senders about delivery status
+        const senderIds = messages
+          .filter(msg => undeliveredMessages.includes(msg.id))
+          .map(msg => msg.senderId);
+
+        [...new Set(senderIds)].forEach(senderId => {
+          io.to(`user_${senderId}`).emit('messages_delivered', {
+            chatId,
+            messageIds: undeliveredMessages,
+            deliveredBy: userId
+          });
+        });
+      }
+    } catch (deliveryError) {
+      console.error('⚠️ Failed to mark messages as delivered:', deliveryError);
+      // Don't fail the request for delivery update errors
     }
 
-    res.json({ 
+    const response = { 
       messages: messages.reverse(),
-      hasMore: messages.length === Number(limit),
-      page: Number(page)
+      hasMore: messages.length === limitNum,
+      page: pageNum,
+      totalFetched: messages.length
+    };
+
+    console.log('📤 Sending response:', {
+      messageCount: response.messages.length,
+      hasMore: response.hasMore,
+      page: response.page
     });
-  } catch (error) {
-    console.error('Get messages error:', error);
-    res.status(500).json({ error: 'Server error' });
+
+    res.json(response);
+    
+  } catch (error: any) {
+    console.error('❌ Get messages error:', {
+      error: error.message,
+      stack: error.stack,
+      chatId: req.params.chatId,
+      userId: req.user?.id,
+      query: req.query
+    });
+    
+    // More specific error responses
+    if (error.code === 'P2025') {
+      return res.status(404).json({ error: 'Chat not found' });
+    }
+    
+    if (error.name === 'PrismaClientKnownRequestError') {
+      return res.status(400).json({ error: 'Database query error' });
+    }
+    
+    res.status(500).json({ 
+      error: 'Server error',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
