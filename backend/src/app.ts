@@ -22,11 +22,7 @@ const server = createServer(app);
 
 // Enhanced CORS configuration
 const corsOptions = {
-  origin: [
-    "https://justconnect-ui.onrender.com",
-    "http://localhost:3000", // For development
-    /^https:\/\/.*\.onrender\.com$/, // Allow all Render subdomains
-  ],
+  origin: "*",
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
   credentials: true,
@@ -43,11 +39,7 @@ const socketConfig = {
 // Enhanced Socket.IO configuration for production - FIXED: Use direct strings for transports
 const io = new Server(server, {
   cors: {
-    origin: [
-      "https://justconnect-ui.onrender.com",
-      "http://localhost:3000", // For development
-      /^https:\/\/.*\.onrender\.com$/, // Allow all Render subdomains
-    ],
+    origin: "*",
     methods: ["GET", "POST"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: false, // Set to false for better compatibility
