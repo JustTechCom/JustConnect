@@ -32,15 +32,15 @@ const corsOptions = {
   credentials: true,
 };
 
-// Socket.io configuration options - FIXED: Store config separately
+// Socket.io configuration options - FIXED: Store config separately without Transport types
 const socketConfig = {
   pingTimeout: 60000,
   pingInterval: 25000,
   maxHttpBufferSize: 1e8,
-  transports: ['websocket', 'polling']
+  transportNames: ['websocket', 'polling'] as const // Store as const for type safety
 };
 
-// Enhanced Socket.IO configuration for production
+// Enhanced Socket.IO configuration for production - FIXED: Use direct strings for transports
 const io = new Server(server, {
   cors: {
     origin: [
@@ -53,7 +53,7 @@ const io = new Server(server, {
     credentials: false, // Set to false for better compatibility
   },
   allowEIO3: true, // Allow Engine.IO v3 clients
-  transports: socketConfig.transports,
+  transports: ['websocket', 'polling'], // FIXED: Use direct array instead of reference
   maxHttpBufferSize: socketConfig.maxHttpBufferSize,
   pingTimeout: socketConfig.pingTimeout,
   pingInterval: socketConfig.pingInterval,
@@ -119,7 +119,7 @@ app.get('/socket-health', (req, res) => {
       pingTimeout: socketConfig.pingTimeout,
       pingInterval: socketConfig.pingInterval,
       maxHttpBufferSize: socketConfig.maxHttpBufferSize,
-      transports: socketConfig.transports,
+      transports: socketConfig.transportNames, // FIXED: Use transportNames
     },
     timestamp: new Date().toISOString(),
   };
