@@ -257,14 +257,17 @@ RUN echo '<!DOCTYPE html> \
 </html>' > /usr/share/nginx/html/50x.html
 
 # Add startup script that waits for backend
-RUN echo '#!/bin/sh \
-echo "Starting nginx frontend..." \
-echo "Nginx configuration:" \
-cat /etc/nginx/conf.d/default.conf | head -20 \
-echo "..." \
-echo "Starting nginx server..." \
-exec nginx -g "daemon off;"' > /docker-entrypoint-custom.sh && \
-chmod +x /docker-entrypoint-custom.sh
+RUN cat << 'EOF' > /docker-entrypoint-custom.sh
+#!/bin/sh
+echo "Starting nginx frontend..."
+echo "Nginx configuration:"
+cat /etc/nginx/conf.d/default.conf | head -20
+echo "..."
+echo "Starting nginx server..."
+exec nginx -g "daemon off;"
+EOF
+
+RUN chmod +x /docker-entrypoint-custom.sh
 
 EXPOSE 80
 
