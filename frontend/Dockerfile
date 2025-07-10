@@ -153,7 +153,7 @@ server { \
         # Try to proxy to backend, fallback to 503 if backend is down \
         error_page 502 503 504 = @backend_fallback; \
         \
-        proxy_pass http://backend_upstream/api/; \
+        proxy_pass http://justconnect-o8k8.onrender.com/api/; \
         proxy_http_version 1.1; \
         proxy_set_header Upgrade $http_upgrade; \
         proxy_set_header Connection "upgrade"; \
@@ -177,7 +177,7 @@ server { \
     location /socket.io/ { \
         error_page 502 503 504 = @backend_fallback; \
         \
-        proxy_pass http://backend_upstream/socket.io/; \
+        proxy_pass http://justconnect-o8k8.onrender.com/socket.io/; \
         proxy_http_version 1.1; \
         proxy_set_header Upgrade $http_upgrade; \
         proxy_set_header Connection "upgrade"; \
