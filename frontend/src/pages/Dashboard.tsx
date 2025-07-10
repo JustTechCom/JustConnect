@@ -1,8 +1,9 @@
+// frontend/src/pages/Dashboard.tsx - Çift header sorunu düzeltmesi
+
 import React, { useEffect, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../store';
 import { fetchChats, setActiveChat } from '../store/slices/chatSlice';
-import { fetchMessages } from '../store/slices/messageSlice';
 import { useAuth } from '../hooks/useAuth';
 import Sidebar from '../components/Sidebar/Sidebar';
 import ChatArea from '../components/Chat/ChatArea';
@@ -29,13 +30,6 @@ const Dashboard: React.FC = () => {
     // Fetch user's chats on component mount
     dispatch(fetchChats());
   }, [dispatch]);
-
-  useEffect(() => {
-    // Fetch messages when active chat changes
-    if (activeChat) {
-      dispatch(fetchMessages({ chatId: activeChat.id }));
-    }
-  }, [activeChat, dispatch]);
 
   const handleChatSelect = (chat: any) => {
     dispatch(setActiveChat(chat));
@@ -74,7 +68,7 @@ const Dashboard: React.FC = () => {
 
         {/* Main Content */}
         <div className="flex-1 flex flex-col">
-          {/* Top Header */}
+          {/* DÜZELTME: Basit top header - chat bilgileri kaldırıldı */}
           <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
@@ -85,76 +79,39 @@ const Dashboard: React.FC = () => {
                   <Menu className="w-5 h-5 text-gray-600 dark:text-gray-300" />
                 </button>
                 
-                {activeChat && (
-                  <div className="flex items-center space-x-3">
-                    <div className="relative">
-                      <img
-                        src={activeChat.avatar || '/default-avatar.png'}
-                        alt={activeChat.name || 'Chat'}
-                        className="w-8 h-8 rounded-full"
-                      />
-                      {activeChat.type === 'DIRECT' && activeChat.members.length > 0 && (
-                        <div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full ring-2 ring-white dark:ring-gray-800 ${
-                          activeChat.members[0].user.isOnline ? 'bg-green-500' : 'bg-gray-400'
-                        }`}></div>
-                      )}
-                    </div>
-                    <div>
-                      <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
-                        {activeChat.name || 
-                         (activeChat.type === 'DIRECT' && activeChat.members.length > 0
-                           ? `${activeChat.members[0].user.firstName} ${activeChat.members[0].user.lastName}`
-                           : 'Unnamed Chat')}
-                      </h1>
-                      {activeChat.type === 'DIRECT' && activeChat.members.length > 0 && (
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                          {activeChat.members[0].user.isOnline ? 'Çevrimiçi' : 'Çevrimdışı'}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )}
+                {/* SADECE BAŞLIK */}
+                <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  JustConnect
+                </h1>
               </div>
 
-              <div className="flex items-center space-x-3">
-                <button
-                  onClick={() => dispatch(toggleDarkMode())}
-                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                  title={isDarkMode ? 'Açık moda geç' : 'Koyu moda geç'}
-                >
-                  {isDarkMode ? (
-                    <Sun className="w-5 h-5 text-yellow-500" />
-                  ) : (
-                    <Moon className="w-5 h-5 text-gray-600" />
-                  )}
-                </button>
-
+              <div className="flex items-center space-x-2">
                 <button className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                   <Search className="w-5 h-5 text-gray-600 dark:text-gray-300" />
                 </button>
-
+                
+                <button 
+                  onClick={() => dispatch(toggleDarkMode())}
+                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                >
+                  {isDarkMode ? (
+                    <Sun className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+                  ) : (
+                    <Moon className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+                  )}
+                </button>
+                
                 <button className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                   <Settings className="w-5 h-5 text-gray-600 dark:text-gray-300" />
                 </button>
-
-                <div className="flex items-center space-x-2">
-                  <img
-                    src={user?.avatar || '/default-avatar.png'}
-                    alt={user?.firstName}
-                    className="w-8 h-8 rounded-full ring-2 ring-blue-500"
-                  />
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {user?.firstName} {user?.lastName}
-                  </span>
-                </div>
               </div>
             </div>
           </header>
 
-          {/* Chat Area */}
+          {/* Chat Area - BURASI DEĞİŞMEDİ */}
           <div className="flex-1 overflow-hidden">
             {activeChat ? (
-              <ChatArea chat={activeChat} />
+              <ChatArea key={activeChat.id} chat={activeChat} />
             ) : (
               <WelcomeScreen />
             )}
