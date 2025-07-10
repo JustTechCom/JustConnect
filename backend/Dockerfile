@@ -39,29 +39,11 @@ WORKDIR /app
 COPY . .
 
 # Create tsconfig.json if missing - FIXED SYNTAX
-RUN if [ ! -f tsconfig.json ]; then \
-      echo "Creating tsconfig.json..."; \
-      echo '{ \
-        "compilerOptions": { \
-          "target": "ES2020", \
-          "module": "commonjs", \
-          "lib": ["ES2020"], \
-          "outDir": "./dist", \
-          "rootDir": "./src", \
-          "strict": true, \
-          "esModuleInterop": true, \
-          "skipLibCheck": true, \
-          "forceConsistentCasingInFileNames": true, \
-          "declaration": true, \
-          "sourceMap": true, \
-          "resolveJsonModule": true, \
-          "experimentalDecorators": true, \
-          "emitDecoratorMetadata": true \
-        }, \
-        "include": ["src/**/*"], \
-        "exclude": ["node_modules", "dist", "**/*.test.ts"] \
-      }' > tsconfig.json; \
-    fi
+RUN if [ ! -f package-lock.json ]; then \
+      echo "Generating package-lock.json..."; \
+      npm install --package-lock-only; \
+    fi && \
+    (npm ci --omit=dev || npm install --omit=dev)
 
 # Verify Prisma schema exists
 RUN ls -la prisma/ || echo "Prisma directory not found"
