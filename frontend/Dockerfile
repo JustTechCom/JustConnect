@@ -124,8 +124,8 @@ COPY --from=build /app/build /usr/share/nginx/html
 
 # ✅ Create flexible nginx config that doesn't fail on missing upstream
 RUN echo 'upstream backend_upstream { \
-    server backend:5000 max_fails=3 fail_timeout=30s; \
-    server 127.0.0.1:5000 backup; \
+     server justconnect-o8k8.onrender.com:443 max_fails=3 fail_timeout=30s; \
+     server justconnect-o8k8.onrender.com:443 backup; \
 } \
  \
 server { \
