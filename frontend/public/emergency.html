@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#3B82F6" />
+    <meta name="description" content="JustConnect - Gerçek zamanlı mesajlaşma uygulaması" />
+    <link rel="manifest" href="/manifest.json" />
+    <title>JustConnect</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+                'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+                sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+        
+        .container {
+            text-align: center;
+            padding: 2rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            max-width: 400px;
+            width: 90%;
+        }
+        
+        .logo {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            font-weight: bold;
+        }
+        
+        .title {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+            color: #f8fafc;
+        }
+        
+        .subtitle {
+            font-size: 1rem;
+            margin-bottom: 2rem;
+            color: #e2e8f0;
+            opacity: 0.8;
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+            margin-bottom: 1rem;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .status {
+            font-size: 0.9rem;
+            color: #cbd5e0;
+            margin-top: 1rem;
+        }
+        
+        .retry-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            margin-top: 1rem;
+            transition: all 0.3s ease;
+        }
+        
+        .retry-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+        
+        .error {
+            color: #fecaca;
+            font-size: 0.85rem;
+            margin-top: 0.5rem;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">💬</div>
+        <h1 class="title">JustConnect</h1>
+        <p class="subtitle">Mesajlaşma uygulaması yükleniyor...</p>
+        
+        <div class="spinner"></div>
+        
+        <div class="status" id="status">
+            Uygulama başlatılıyor...
+        </div>
+        
+        <div class="error" id="error">
+            Uygulama yüklenirken bir sorun oluştu.
+        </div>
+        
+        <button class="retry-btn" onclick="window.location.reload()">
+            Yeniden Dene
+        </button>
+    </div>
+
+    <script>
+        // Loading status messages
+        const messages = [
+            'Uygulama başlatılıyor...',
+            'Bağlantı kuruluyor...',
+            'Veriler yükleniyor...',
+            'Neredeyse hazır...'
+        ];
+        
+        let messageIndex = 0;
+        const statusEl = document.getElementById('status');
+        const errorEl = document.getElementById('error');
+        
+        // Update status message
+        function updateStatus() {
+            if (messageIndex < messages.length) {
+                statusEl.textContent = messages[messageIndex];
+                messageIndex++;
+                setTimeout(updateStatus, 2000);
+            } else {
+                // Show error after all messages
+                statusEl.style.display = 'none';
+                errorEl.style.display = 'block';
+            }
+        }
+        
+        // Start status updates
+        setTimeout(updateStatus, 1000);
+        
+        // Try to reload after 10 seconds
+        setTimeout(() => {
+            console.log('Auto-reloading page...');
+            window.location.reload();
+        }, 10000);
+        
+        // Check for main app and redirect if available
+        function checkMainApp() {
+            fetch('/static/js/main.js')
+                .then(response => {
+                    if (response.ok) {
+                        window.location.reload();
+                    }
+                })
+                .catch(() => {
+                    // Main app not ready yet
+                });
+        }
+        
+        // Check every 3 seconds
+        setInterval(checkMainApp, 3000);
+    </script>
+</body>
+</html>
