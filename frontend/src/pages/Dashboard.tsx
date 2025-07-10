@@ -1,4 +1,4 @@
-// frontend/src/pages/Dashboard.tsx - Çift header sorunu düzeltmesi
+// frontend/src/pages/Dashboard.tsx - Mobil responsive düzeltmesi
 
 import React, { useEffect, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
@@ -8,7 +8,7 @@ import { useAuth } from '../hooks/useAuth';
 import Sidebar from '../components/Sidebar/Sidebar';
 import ChatArea from '../components/Chat/ChatArea';
 import WelcomeScreen from '../components/Chat/WelcomeScreen';
-import { Menu, Search, Settings, Moon, Sun } from 'lucide-react';
+import { Menu, Search, Settings, Moon, Sun, ArrowLeft } from 'lucide-react';
 import { toggleSidebar, toggleDarkMode } from '../store/slices/uiSlice';
 
 const Dashboard: React.FC = () => {
@@ -25,6 +25,18 @@ const Dashboard: React.FC = () => {
   } = useSelector((state: RootState) => state.ui);
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Detect mobile screen size
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   useEffect(() => {
     // Fetch user's chats on component mount
@@ -33,6 +45,18 @@ const Dashboard: React.FC = () => {
 
   const handleChatSelect = (chat: any) => {
     dispatch(setActiveChat(chat));
+    
+    // On mobile, close sidebar when chat is selected
+    if (isMobile && sidebarOpen) {
+      dispatch(toggleSidebar());
+    }
+  };
+
+  const handleBackToChats = () => {
+    dispatch(setActiveChat(null));
+    if (isMobile) {
+      dispatch(toggleSidebar());
+    }
   };
 
   const filteredChats = chats.filter(chat => {
@@ -51,11 +75,23 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className={`h-screen flex ${isDarkMode ? 'dark' : ''}`}>
-      <div className="flex w-full bg-gray-50 dark:bg-gray-900">
+      <div className="flex w-full bg-gray-50 dark:bg-gray-900 relative">
+        {/* Mobile Overlay */}
+        {isMobile && sidebarOpen && (
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
+            onClick={() => dispatch(toggleSidebar())}
+          />
+        )}
+
         {/* Sidebar */}
         <div className={`${
-          sidebarOpen ? 'w-80' : 'w-0'
-        } transition-all duration-300 ease-in-out flex-shrink-0 overflow-hidden`}>
+          isMobile 
+            ? `fixed left-0 top-0 h-full w-80 z-50 transform transition-transform duration-300 ${
+                sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+              }`
+            : `${sidebarOpen ? 'w-80' : 'w-0'} transition-all duration-300 ease-in-out flex-shrink-0`
+        } overflow-hidden`}>
           <Sidebar
             chats={filteredChats}
             activeChat={activeChat}
@@ -67,48 +103,72 @@ const Dashboard: React.FC = () => {
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 flex flex-col">
-          {/* DÜZELTME: Basit top header - chat bilgileri kaldırıldı */}
-          <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3">
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Top Header - Mobil responsive */}
+          <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-3 sm:px-4 py-3">
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <button
-                  onClick={() => dispatch(toggleSidebar())}
-                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                >
-                  <Menu className="w-5 h-5 text-gray-600 dark:text-gray-300" />
-                </button>
+              <div className="flex items-center space-x-2 sm:space-x-4">
+                {/* Mobile: Back button when chat is active, Menu when not */}
+                {isMobile && activeChat ? (
+                  <button
+                    onClick={handleBackToChats}
+                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => dispatch(toggleSidebar())}
+                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <Menu className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+                  </button>
+                )}
                 
-                {/* SADECE BAŞLIK */}
-                <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  JustConnect
+                {/* Title */}
+                <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">
+                  {isMobile && activeChat 
+                    ? (activeChat.name || 
+                       (activeChat.type === 'DIRECT' && activeChat.members.length > 0
+                         ? `${activeChat.members[0].user.firstName} ${activeChat.members[0].user.lastName}`
+                         : 'Chat'))
+                    : 'JustConnect'
+                  }
                 </h1>
               </div>
 
-              <div className="flex items-center space-x-2">
-                <button className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                  <Search className="w-5 h-5 text-gray-600 dark:text-gray-300" />
-                </button>
+              {/* Action buttons - Hide some on mobile */}
+              <div className="flex items-center space-x-1 sm:space-x-2">
+                {/* Search - Hidden on mobile when chat is active */}
+                {!(isMobile && activeChat) && (
+                  <button className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                    <Search className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-gray-300" />
+                  </button>
+                )}
                 
+                {/* Dark mode toggle */}
                 <button 
                   onClick={() => dispatch(toggleDarkMode())}
                   className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                 >
                   {isDarkMode ? (
-                    <Sun className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+                    <Sun className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-gray-300" />
                   ) : (
-                    <Moon className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+                    <Moon className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-gray-300" />
                   )}
                 </button>
                 
-                <button className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                  <Settings className="w-5 h-5 text-gray-600 dark:text-gray-300" />
-                </button>
+                {/* Settings - Hidden on mobile when chat is active */}
+                {!(isMobile && activeChat) && (
+                  <button className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                    <Settings className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-gray-300" />
+                  </button>
+                )}
               </div>
             </div>
           </header>
 
-          {/* Chat Area - BURASI DEĞİŞMEDİ */}
+          {/* Chat Area */}
           <div className="flex-1 overflow-hidden">
             {activeChat ? (
               <ChatArea key={activeChat.id} chat={activeChat} />

@@ -1,3 +1,5 @@
+/* frontend/src/index.css - Avatar ve genel iyileştirmeler ekleyin */
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -13,6 +15,45 @@ body {
 
 * {
   box-sizing: border-box;
+}
+
+/* AVATAR STABİLİZASYONU */
+.avatar-stable {
+  background-color: #f3f4f6;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%236b7280' viewBox='0 0 24 24'%3E%3Cpath d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/%3E%3C/svg%3E");
+  background-size: 60%;
+  background-repeat: no-repeat;
+  background-position: center;
+  transition: none !important;
+  will-change: auto;
+}
+
+.avatar-stable img {
+  transition: none !important;
+  transform: none !important;
+  will-change: auto;
+}
+
+/* ONLINE STATUS STABİLİZASYONU */
+.online-indicator {
+  transition: none !important;
+  will-change: auto;
+}
+
+/* MOBIL RESPONSIVE İYİLEŞTİRMELER */
+@media (max-width: 768px) {
+  .mobile-compact {
+    padding: 0.5rem !important;
+  }
+  
+  .mobile-text-sm {
+    font-size: 0.875rem !important;
+  }
+  
+  .mobile-avatar {
+    width: 2rem !important;
+    height: 2rem !important;
+  }
 }
 
 /* Custom scrollbar */
@@ -126,9 +167,10 @@ body {
   }
 }
 
-/* Online status pulse */
+/* Online status pulse - STABİL */
 .online-pulse {
   animation: onlinePulse 2s infinite;
+  will-change: auto;
 }
 
 @keyframes onlinePulse {
@@ -163,7 +205,38 @@ body {
   100% { transform: rotate(360deg); }
 }
 
-/* Dark mode transitions */
-* {
+/* Dark mode transitions - SADECE GEREKENLERE */
+.dark-transition {
   transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+/* PERFORMANS İYİLEŞTİRMELERİ */
+.gpu-accelerated {
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+/* Layout shift önleme */
+.layout-stable {
+  contain: layout style;
+}
+
+/* MOBIL TOUCH İYİLEŞTİRMELERİ */
+@media (max-width: 768px) {
+  /* Touch friendly button sizes */
+  .mobile-touch {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Prevent zoom on input focus */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+  
+  /* Better mobile spacing */
+  .mobile-spacing {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
 }
