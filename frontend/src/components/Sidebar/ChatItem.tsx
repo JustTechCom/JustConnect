@@ -73,7 +73,53 @@ const ChatItem: React.FC<ChatItemProps> = ({ chat, isActive, onClick }) => {
   };
 
   const { name, avatar, isOnline, memberCount, username } = getChatDisplayInfo();
+const getChatName = () => {
+  if (chat.name) return chat.name;
+  
+  if (chat.type === 'DIRECT' && chat.members?.length > 0) {
+    const otherMember = chat.members[0];
+    // Güvenli null check
+    if (otherMember?.user?.firstName && otherMember?.user?.lastName) {
+      return `${otherMember.user.firstName} ${otherMember.user.lastName}`;
+    }
+    // Fallback: username varsa onu kullan
+    if (otherMember?.user?.username) {
+      return `@${otherMember.user.username}`;
+    }
+  }
+  
+  return 'Unnamed Chat';
+};
 
+const getChatAvatar = () => {
+  if (chat.avatar) return chat.avatar;
+  
+  if (chat.type === 'DIRECT' && chat.members?.length > 0) {
+    const otherMember = chat.members[0];
+    return otherMember?.user?.avatar || '/default-avatar.png';
+  }
+  
+  return '/default-group-avatar.png';
+};
+
+const getLastMessagePreview = () => {
+  if (isTyping) {
+    const typingUsernames = typingUsers[chat.id]
+      ?.map(userId => {
+        const member = chat.members?.find(m => m?.user?.id === userId);
+        return member?.user?.firstName || 'Someone';
+      })
+      .join(', ');
+    return `${typingUsernames} yazıyor...`;
+  }
+  
+  return chat.lastMessage || 'Henüz mesaj yok';
+};
+
+// Component'in geri kalanında da benzer güvenli kontroller ekleyin
+const isOnline = chat.type === 'DIRECT' && chat.members?.length > 0 
+  ? onlineUsers.has(chat.members[0]?.user?.id)
+  : false;
   const getLastMessagePreview = () => {
     if (isTyping) {
       return 'yazıyor...';

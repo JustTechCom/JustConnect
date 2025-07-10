@@ -12,56 +12,53 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
     const userId = (req as any).user.id;
 
     const chats = await prisma.chat.findMany({
-      where: {
-        members: {
-          some: {
-            userId: userId
-          }
-        }
-      },
-      include: {
-        members: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                email: true,
-                username: true,
-                firstName: true,
-                lastName: true,
-                avatar: true,
-                isOnline: true,
-                lastSeen: true
-              }
-            }
-          }
-        },
-        messages: {
-          take: 1,
-          orderBy: {
-            createdAt: 'desc'
-          },
-          include: {
-            sender: {
-              select: {
-                id: true,
-                username: true,
-                firstName: true,
-                lastName: true
-              }
-            }
-          }
-        },
-        _count: {
-          select: {
-            messages: true
-          }
-        }
-      },
-      orderBy: {
-        updatedAt: 'desc'
+  where: {
+    members: {
+      some: {
+        userId: req.user!.id
       }
-    });
+    }
+  },
+  include: {
+    members: {
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            avatar: true,
+            isOnline: true,
+            lastSeen: true,
+            verified: true
+          }
+        }
+      }
+    },
+    lastMessage: {
+      include: {
+        sender: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            avatar: true
+          }
+        }
+      }
+    },
+    _count: {
+      select: {
+        messages: true
+      }
+    }
+  },
+  orderBy: {
+    updatedAt: 'desc'
+  }
+});
 
     // Transform the data
     const transformedChats = chats.map(chat => ({
