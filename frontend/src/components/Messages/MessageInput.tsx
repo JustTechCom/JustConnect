@@ -1,70 +1,62 @@
-// frontend/src/components/Messages/MessageInput.tsx - Modern Professional Design
-
-import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
+// frontend/src/components/Messages/MessageInput.tsx - Enhanced Modern Design
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useSelector } from 'react-redux';
 import { RootState } from '../../store';
-import { sendMessage } from '../../store/slices/messageSlice';
-import { socketService } from '../../services/socketService';
-import { useTyping } from '../../hooks';
 import { 
   Send, 
-  Paperclip, 
-  Smile, 
   Mic, 
   Image, 
   File, 
-  X,
+  Smile, 
   Plus,
-  Camera,
+  X,
+  Paperclip,
   MapPin,
+  Camera,
+  Video,
   Gift,
-  Hash,
-  At
+  Zap,
+  Square,
+  Play,
+  Pause,
+  StopCircle,
+  RotateCcw
 } from 'lucide-react';
 
 interface MessageInputProps {
   chatId: string;
   onScrollToBottom: () => void;
-  replyTo?: any;
+  replyingTo?: any;
   onCancelReply?: () => void;
-  disabled?: boolean;
+  editingMessage?: any;
+  onCancelEdit?: () => void;
 }
 
-const MessageInput: React.FC<MessageInputProps> = ({ 
-  chatId, 
-  onScrollToBottom, 
-  replyTo, 
+const MessageInput: React.FC<MessageInputProps> = ({
+  chatId,
+  onScrollToBottom,
+  replyingTo,
   onCancelReply,
-  disabled = false
+  editingMessage,
+  onCancelEdit
 }) => {
-  const dispatch = useDispatch();
-  const { isSending } = useSelector((state: RootState) => state.messages);
-  const { user } = useSelector((state: RootState) => state.auth);
-  
   const [message, setMessage] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showAttachments, setShowAttachments] = useState(false);
+  const [attachments, setAttachments] = useState<File[]>([]);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { startTyping, stopTyping } = useTyping(chatId);
-
-  const emojis = [
-    '😀', '😂', '🥰', '😍', '😎', '🤔', '😅', '😊', '👍', '👎', 
-    '❤️', '💕', '🔥', '💯', '👏', '🎉', '😢', '😭', '😡', '😱',
-    '🤯', '😴', '🤤', '🙄', '🙃', '😏', '😘', '🤗', '🤩', '🥳'
-  ];
-
-  const attachmentOptions = [
-    { icon: <Image className="w-5 h-5" />, label: 'Photo', type: 'image', color: 'text-blue-500' },
-    { icon: <Camera className="w-5 h-5" />, label: 'Camera', type: 'camera', color: 'text-green-500' },
-    { icon: <File className="w-5 h-5" />, label: 'File', type: 'file', color: 'text-purple-500' },
-    { icon: <MapPin className="w-5 h-5" />, label: 'Location', type: 'location', color: 'text-red-500' },
-    { icon: <Gift className="w-5 h-5" />, label: 'Gift', type: 'gift', color: 'text-pink-500' },
-  ];
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  const { user } = useSelector((state: RootState) => state.auth);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -74,125 +66,158 @@ const MessageInput: React.FC<MessageInputProps> = ({
     }
   }, [message]);
 
+  // Set editing message content
+  useEffect(() => {
+    if (editingMessage) {
+      setMessage(editingMessage.content);
+      textareaRef.current?.focus();
+    }
+  }, [editingMessage]);
+
   // Recording timer
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isRecording) {
-      interval = setInterval(() => {
+    if (isRecording && !isPaused) {
+      recordingTimerRef.current = setInterval(() => {
         setRecordingTime(prev => prev + 1);
       }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [isRecording]);
-
-  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const value = e.target.value;
-    setMessage(value);
-    
-    if (value.length > 0) {
-      startTyping();
     } else {
-      stopTyping();
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+      }
     }
-  }, [startTyping, stopTyping]);
 
-  const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
+    return () => {
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+      }
+    };
+  }, [isRecording, isPaused]);
+
+  const handleTyping = useCallback(() => {
+    if (!isTyping) {
+      setIsTyping(true);
+      // Emit typing start event
+    }
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    typingTimeoutRef.current = setTimeout(() => {
+      setIsTyping(false);
+      // Emit typing stop event
+    }, 2000);
+  }, [isTyping]);
+
+  const handleMessageChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setMessage(e.target.value);
+    handleTyping();
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
     }
-  }, []);
+  };
 
-  const handleSendMessage = useCallback(async () => {
-    if (!message.trim() || isSending || disabled) return;
+  const handleSendMessage = async () => {
+    if ((!message.trim() && attachments.length === 0) || isRecording) return;
 
-    const messageContent = message.trim();
+    const messageData = {
+      content: message.trim(),
+      chatId,
+      replyTo: replyingTo?.id,
+      attachments: attachments.map(file => ({
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        url: URL.createObjectURL(file) // In real app, upload to server first
+      }))
+    };
+
+    // Send message logic here
+    console.log('Sending message:', messageData);
+
+    // Clear input
     setMessage('');
-    stopTyping();
-
-    try {
-      // Send via socket for real-time delivery
-      socketService.sendMessage({
-        chatId,
-        content: messageContent,
-        type: 'TEXT',
-        replyTo: replyTo?.id
-      });
-
-      onScrollToBottom();
-      
-      if (onCancelReply) {
-        onCancelReply();
-      }
-    } catch (error) {
-      setMessage(messageContent);
-      console.error('Failed to send message:', error);
-    }
-  }, [message, isSending, disabled, chatId, replyTo, onScrollToBottom, onCancelReply, stopTyping]);
-
-  const handleEmojiSelect = useCallback((emoji: string) => {
-    const textarea = textareaRef.current;
-    if (textarea) {
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const newMessage = message.slice(0, start) + emoji + message.slice(end);
-      setMessage(newMessage);
-      
-      setTimeout(() => {
-        textarea.selectionStart = textarea.selectionEnd = start + emoji.length;
-        textarea.focus();
-      }, 0);
-    }
-    
+    setAttachments([]);
     setShowEmojiPicker(false);
-  }, [message]);
-
-  const handleFileSelect = useCallback((type: string) => {
-    switch (type) {
-      case 'image':
-        if (fileInputRef.current) {
-          fileInputRef.current.accept = 'image/*';
-          fileInputRef.current.click();
-        }
-        break;
-      case 'file':
-        if (fileInputRef.current) {
-          fileInputRef.current.accept = '*';
-          fileInputRef.current.click();
-        }
-        break;
-      case 'camera':
-        // Handle camera capture
-        break;
-      case 'location':
-        // Handle location sharing
-        break;
-      default:
-        break;
-    }
     setShowAttachments(false);
-  }, []);
+    onCancelReply?.();
+    onCancelEdit?.();
+    onScrollToBottom();
+  };
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    setAttachments(prev => [...prev, ...files]);
+    setShowAttachments(false);
+    e.target.value = '';
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+      setIsPaused(false);
+      
+      mediaRecorder.ondataavailable = (event) => {
+        // Handle recording data
+        console.log('Recording data:', event.data);
+      };
+    } catch (error) {
+      console.error('Error starting recording:', error);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+    }
+    setIsRecording(false);
+    setRecordingTime(0);
+    setIsPaused(false);
+  };
+
+  const pauseRecording = () => {
+    if (mediaRecorderRef.current) {
+      if (isPaused) {
+        mediaRecorderRef.current.resume();
+      } else {
+        mediaRecorderRef.current.pause();
+      }
+      setIsPaused(!isPaused);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(true);
-  }, []);
+  };
 
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
+  const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
-  }, []);
+  };
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
+  const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
     
     const files = Array.from(e.dataTransfer.files);
-    if (files.length > 0) {
-      // Handle file drop
-      console.log('Files dropped:', files);
-    }
-  }, []);
+    setAttachments(prev => [...prev, ...files]);
+  };
 
   const formatRecordingTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -200,236 +225,261 @@ const MessageInput: React.FC<MessageInputProps> = ({
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  if (disabled) {
-    return (
-      <div className="glass-card-sm border-t-0 border-x-0 rounded-none backdrop-blur-xl">
-        <div className="px-4 py-4 text-center">
-          <p className="text-gray-500 dark:text-gray-400">
-            This conversation is no longer available
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const commonEmojis = ['😊', '😂', '❤️', '👍', '👎', '😮', '😢', '😡', '🎉', '🔥', '💯', '✨'];
 
   return (
-    <div className="glass-card-sm border-t border-x-0 border-b-0 rounded-none backdrop-blur-xl">
-      {/* Reply Preview */}
-      {replyTo && (
-        <div className="px-4 pt-4">
-          <div className="glass-card-sm p-3 border-l-4 border-indigo-500">
+    <div className="relative">
+      {/* Drag overlay */}
+      {dragOver && (
+        <div className="absolute inset-0 bg-primary-500/20 border-2 border-dashed border-primary-500 rounded-3xl flex items-center justify-center z-50 backdrop-blur-sm">
+          <div className="text-center">
+            <Paperclip className="w-12 h-12 text-primary-500 mx-auto mb-2" />
+            <p className="text-primary-700 dark:text-primary-300 font-medium">Dosyaları buraya bırakın</p>
+          </div>
+        </div>
+      )}
+
+      {/* Reply/Edit indicator */}
+      {(replyingTo || editingMessage) && (
+        <div className="mx-6 mb-3">
+          <div className="bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm rounded-2xl p-4 border-l-4 border-primary-500">
             <div className="flex items-center justify-between">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-indigo-600 dark:text-indigo-400 mb-1">
-                  Replying to {replyTo.sender.firstName}
+              <div className="flex-1">
+                <p className="text-sm font-medium text-primary-600 dark:text-primary-400 mb-1">
+                  {editingMessage ? 'Mesajı düzenle' : `${replyingTo?.sender.firstName} kullanıcısına yanıt`}
                 </p>
-                <p className="text-sm text-gray-600 dark:text-gray-300 truncate">
-                  {replyTo.content}
+                <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
+                  {editingMessage ? editingMessage.content : replyingTo?.content}
                 </p>
               </div>
               <button
-                onClick={onCancelReply}
-                className="ml-2 p-1 rounded-lg hover:bg-white/20 transition-colors"
+                onClick={editingMessage ? onCancelEdit : onCancelReply}
+                className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors"
               >
-                <X className="w-4 h-4 text-gray-400" />
+                <X className="w-4 h-4 text-gray-500" />
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Main Input Area */}
+      {/* Attachments preview */}
+      {attachments.length > 0 && (
+        <div className="mx-6 mb-3">
+          <div className="bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm rounded-2xl p-4">
+            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+              Ekli dosyalar ({attachments.length})
+            </h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {attachments.map((file, index) => (
+                <div key={index} className="relative group">
+                  <div className="bg-white dark:bg-gray-800 rounded-xl p-3 border border-gray-200 dark:border-gray-700">
+                    {file.type.startsWith('image/') ? (
+                      <img
+                        src={URL.createObjectURL(file)}
+                        alt={file.name}
+                        className="w-full h-16 object-cover rounded-lg mb-2"
+                      />
+                    ) : (
+                      <div className="w-full h-16 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center mb-2">
+                        <File className="w-6 h-6 text-gray-400" />
+                      </div>
+                    )}
+                    <p className="text-xs text-gray-600 dark:text-gray-400 truncate">{file.name}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-500">
+                      {(file.size / 1024 / 1024).toFixed(1)} MB
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => removeAttachment(index)}
+                    className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main input area */}
       <div 
-        className={`px-4 py-4 transition-colors ${dragOver ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''}`}
+        className="p-6 bg-gradient-to-r from-white/80 to-white/60 dark:from-gray-800/80 dark:to-gray-900/60 backdrop-blur-xl border-t border-white/20 dark:border-gray-700/30"
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        {dragOver && (
-          <div className="absolute inset-0 bg-indigo-500/10 backdrop-blur-sm flex items-center justify-center z-10 rounded-lg border-2 border-dashed border-indigo-400">
-            <div className="text-center">
-              <File className="w-12 h-12 text-indigo-500 mx-auto mb-2" />
-              <p className="text-lg font-medium text-indigo-600 dark:text-indigo-400">
-                Drop files to share
-              </p>
+        {isRecording ? (
+          /* Recording interface */
+          <div className="flex items-center space-x-4 bg-red-50 dark:bg-red-900/20 rounded-3xl p-4">
+            <div className="flex-1 flex items-center space-x-3">
+              <div className="w-4 h-4 bg-red-500 rounded-full animate-pulse" />
+              <span className="font-mono text-lg font-semibold text-red-600 dark:text-red-400">
+                {formatRecordingTime(recordingTime)}
+              </span>
+              <span className="text-sm text-red-600 dark:text-red-400">
+                {isPaused ? 'Duraklatıldı' : 'Kaydediliyor'}
+              </span>
             </div>
-          </div>
-        )}
-
-        <div className="flex items-end space-x-3">
-          {/* Attachment Button */}
-          <div className="relative">
-            <button
-              onClick={() => setShowAttachments(!showAttachments)}
-              className="p-3 rounded-xl hover:bg-white/20 transition-all duration-200 group"
-              disabled={isSending}
-            >
-              <Plus className="w-5 h-5 text-gray-600 dark:text-gray-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 group-hover:rotate-45 transition-all duration-200" />
-            </button>
             
-            {/* Attachment Menu */}
-            {showAttachments && (
-              <div className="absolute bottom-full left-0 mb-2 glass-card p-2 animate-slide-up">
-                <div className="grid grid-cols-2 gap-2 w-40">
-                  {attachmentOptions.map((option) => (
-                    <button
-                      key={option.type}
-                      onClick={() => handleFileSelect(option.type)}
-                      className="flex flex-col items-center p-3 rounded-lg hover:bg-white/10 transition-colors group"
-                    >
-                      <div className={`${option.color} group-hover:scale-110 transition-transform mb-1`}>
-                        {option.icon}
-                      </div>
-                      <span className="text-xs text-gray-600 dark:text-gray-300">
-                        {option.label}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Message Input */}
-          <div className="flex-1 relative">
-            <div className="modern-input flex items-end p-0 bg-white/80 dark:bg-gray-800/80">
-              <textarea
-                ref={textareaRef}
-                value={message}
-                onChange={handleInputChange}
-                onKeyPress={handleKeyPress}
-                placeholder={isRecording ? "Recording..." : "Type your message..."}
-                disabled={isSending || isRecording}
-                className="flex-1 resize-none border-0 bg-transparent focus:ring-0 focus:outline-none px-4 py-3 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
-                rows={1}
-                style={{ maxHeight: '120px' }}
-              />
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={pauseRecording}
+                className="p-3 bg-yellow-500 hover:bg-yellow-600 text-white rounded-full transition-colors"
+              >
+                {isPaused ? <Play className="w-5 h-5" /> : <Pause className="w-5 h-5" />}
+              </button>
               
-              {/* Message Actions */}
-              <div className="flex items-center space-x-1 px-2 pb-3">
-                {/* Emoji Picker */}
-                <div className="relative">
-                  <button
-                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                    className="p-2 rounded-lg hover:bg-white/20 transition-colors"
-                  >
-                    <Smile className="w-5 h-5 text-gray-600 dark:text-gray-300 hover:text-yellow-500" />
-                  </button>
-                  
-                  {showEmojiPicker && (
-                    <div className="absolute bottom-full right-0 mb-2 glass-card p-4 animate-slide-up">
-                      <div className="grid grid-cols-6 gap-2 w-64">
-                        {emojis.map((emoji) => (
-                          <button
-                            key={emoji}
-                            onClick={() => handleEmojiSelect(emoji)}
-                            className="p-2 rounded-lg hover:bg-white/20 transition-colors text-lg"
-                          >
-                            {emoji}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Mention & Hashtag */}
-                <button className="p-2 rounded-lg hover:bg-white/20 transition-colors">
-                  <At className="w-5 h-5 text-gray-600 dark:text-gray-300 hover:text-blue-500" />
-                </button>
-                
-                <button className="p-2 rounded-lg hover:bg-white/20 transition-colors">
-                  <Hash className="w-5 h-5 text-gray-600 dark:text-gray-300 hover:text-green-500" />
-                </button>
-              </div>
+              <button
+                onClick={stopRecording}
+                className="p-3 bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors"
+              >
+                <Square className="w-5 h-5" />
+              </button>
+              
+              <button
+                onClick={() => {
+                  stopRecording();
+                  // Send recording
+                }}
+                className="p-3 bg-green-500 hover:bg-green-600 text-white rounded-full transition-colors"
+              >
+                <Send className="w-5 h-5" />
+              </button>
             </div>
           </div>
-
-          {/* Voice/Send Button */}
-          <div className="flex space-x-2">
-            {/* Voice Recording */}
-            {!message.trim() && (
+        ) : (
+          /* Normal input interface */
+          <div className="flex items-end space-x-3">
+            {/* Attachment button */}
+            <div className="relative">
               <button
-                onMouseDown={() => setIsRecording(true)}
-                onMouseUp={() => setIsRecording(false)}
-                onMouseLeave={() => setIsRecording(false)}
-                className={`p-3 rounded-xl transition-all duration-200 ${
-                  isRecording 
-                    ? 'bg-red-500 text-white scale-110' 
-                    : 'hover:bg-white/20 text-gray-600 dark:text-gray-300 hover:text-red-500'
+                onClick={() => setShowAttachments(!showAttachments)}
+                className={`p-3 rounded-2xl transition-all duration-300 hover:scale-110 ${
+                  showAttachments
+                    ? 'bg-primary-500 text-white shadow-glow-primary'
+                    : 'bg-white/60 dark:bg-gray-800/60 text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-700'
                 }`}
+              >
+                <Plus className={`w-5 h-5 transition-transform duration-300 ${showAttachments ? 'rotate-45' : ''}`} />
+              </button>
+
+              {/* Attachment menu */}
+              {showAttachments && (
+                <div className="absolute bottom-16 left-0 bg-white dark:bg-gray-800 rounded-2xl shadow-strong border border-gray-200 dark:border-gray-700 p-2 animate-scale-in z-10">
+                  <div className="grid grid-cols-2 gap-2 w-48">
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex flex-col items-center p-3 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors group"
+                    >
+                      <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                        <File className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                      </div>
+                      <span className="text-xs text-gray-700 dark:text-gray-300">Dosya</span>
+                    </button>
+                    
+                    <button className="flex flex-col items-center p-3 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors group">
+                      <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                        <Image className="w-5 h-5 text-green-600 dark:text-green-400" />
+                      </div>
+                      <span className="text-xs text-gray-700 dark:text-gray-300">Fotoğraf</span>
+                    </button>
+                    
+                    <button className="flex flex-col items-center p-3 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors group">
+                      <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                        <Camera className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                      </div>
+                      <span className="text-xs text-gray-700 dark:text-gray-300">Kamera</span>
+                    </button>
+                    
+                    <button className="flex flex-col items-center p-3 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors group">
+                      <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-xl flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                        <MapPin className="w-5 h-5 text-red-600 dark:text-red-400" />
+                      </div>
+                      <span className="text-xs text-gray-700 dark:text-gray-300">Konum</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Text input area */}
+            <div className="flex-1 relative">
+              <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-3xl border border-white/30 dark:border-gray-700/30 shadow-soft hover:shadow-medium transition-all duration-300 focus-within:shadow-glow-primary focus-within:border-primary-300 dark:focus-within:border-primary-600">
+                <textarea
+                  ref={textareaRef}
+                  value={message}
+                  onChange={handleMessageChange}
+                  onKeyDown={handleKeyPress}
+                  placeholder="Mesajınızı yazın..."
+                  className="w-full p-4 pr-12 bg-transparent border-none outline-none resize-none text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 max-h-32 scrollbar-hide"
+                  rows={1}
+                />
+
+                {/* Emoji button */}
+                <button
+                  onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                  className={`absolute bottom-3 right-3 p-2 rounded-full transition-all duration-300 hover:scale-110 ${
+                    showEmojiPicker
+                      ? 'bg-primary-500 text-white'
+                      : 'text-gray-400 hover:text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/30'
+                  }`}
+                >
+                  <Smile className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Emoji picker */}
+              {showEmojiPicker && (
+                <div className="absolute bottom-16 right-0 bg-white dark:bg-gray-800 rounded-2xl shadow-strong border border-gray-200 dark:border-gray-700 p-4 animate-scale-in z-10">
+                  <div className="grid grid-cols-6 gap-2 w-64">
+                    {commonEmojis.map((emoji) => (
+                      <button
+                        key={emoji}
+                        onClick={() => {
+                          setMessage(prev => prev + emoji);
+                          setShowEmojiPicker(false);
+                        }}
+                        className="p-2 text-xl hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors hover:scale-125"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Voice/Send button */}
+            {message.trim() || attachments.length > 0 ? (
+              <button
+                onClick={handleSendMessage}
+                className="p-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-2xl shadow-medium hover:shadow-strong hover:scale-110 active:scale-95 transition-all duration-200 hover:from-primary-600 hover:to-primary-700"
+              >
+                <Send className="w-5 h-5" />
+              </button>
+            ) : (
+              <button
+                onClick={startRecording}
+                className="p-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-2xl shadow-medium hover:shadow-strong hover:scale-110 active:scale-95 transition-all duration-200 hover:from-red-600 hover:to-red-700"
               >
                 <Mic className="w-5 h-5" />
               </button>
             )}
-
-            {/* Send Button */}
-            {message.trim() && (
-              <button
-                onClick={handleSendMessage}
-                disabled={isSending}
-                className="btn-primary p-3 rounded-xl hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-              >
-                {isSending ? (
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <Send className="w-5 h-5" />
-                )}
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Recording Indicator */}
-        {isRecording && (
-          <div className="mt-3 flex items-center justify-center space-x-2 text-red-500 animate-pulse">
-            <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-            <span className="text-sm font-medium">
-              Recording... {formatRecordingTime(recordingTime)}
-            </span>
           </div>
         )}
 
-        {/* Typing Indicator */}
-        {message.length > 0 && (
-          <div className="mt-2 flex items-center space-x-2 text-gray-500 dark:text-gray-400">
-            <div className="typing-dots">
-              <div className="typing-dot"></div>
-              <div className="typing-dot"></div>
-              <div className="typing-dot"></div>
-            </div>
-            <span className="text-xs">
-              {user?.firstName} is typing...
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* File Input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        className="hidden"
-        onChange={(e) => {
-          const files = e.target.files;
-          if (files && files.length > 0) {
-            // Handle file selection
-            console.log('Files selected:', files);
-          }
-        }}
-        multiple
-      />
-
-      {/* Click outside to close dropdowns */}
-      {(showEmojiPicker || showAttachments) && (
-        <div
-          className="fixed inset-0 z-40"
-          onClick={() => {
-            setShowEmojiPicker(false);
-            setShowAttachments(false);
-          }}
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          onChange={handleFileSelect}
+          className="hidden"
+          accept="*/*"
         />
-      )}
+      </div>
     </div>
   );
 };
