@@ -1,4 +1,4 @@
-// frontend/src/store/slices/chatSlice.ts - Enhanced chat management
+// frontend/src/store/slices/chatSlice.ts - Professional Chat Management
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { Chat, ChatMember, User } from '../../types';
 import { chatAPI, userAPI } from '../../services/api';
@@ -9,12 +9,15 @@ interface ChatState {
   isLoading: boolean;
   error: string | null;
   onlineUsers: Set<string>;
+  activeUsers: Set<string>; // Alias for onlineUsers for compatibility
   typingUsers: { [chatId: string]: string[] };
   searchResults: User[];
   isSearching: boolean;
   unreadCounts: { [chatId: string]: number };
   pinnedChats: string[];
   archivedChats: string[];
+  lastActivity: { [userId: string]: Date };
+  connectionStatus: 'connected' | 'connecting' | 'disconnected';
 }
 
 const initialState: ChatState = {
@@ -23,12 +26,15 @@ const initialState: ChatState = {
   isLoading: false,
   error: null,
   onlineUsers: new Set(),
+  activeUsers: new Set(), // Initialize activeUsers as well
   typingUsers: {},
   searchResults: [],
   isSearching: false,
   unreadCounts: {},
   pinnedChats: [],
   archivedChats: [],
+  lastActivity: {},
+  connectionStatus: 'disconnected',
 };
 
 // Async thunks
@@ -88,7 +94,7 @@ export const searchUsers = createAsyncThunk(
       
       const state = getState() as any;
       const currentUser = state.auth.user;
-      const friends = state.auth.friends;
+      const friends = state.auth.friends || [];
       
       // Exclude current user and existing friends from search
       const excludeIds = [currentUser?.id, ...friends.map((f: User) => f.id)].filter(Boolean);
@@ -236,14 +242,36 @@ const chatSlice = createSlice({
     
     setOnlineUsers: (state, action: PayloadAction<string[]>) => {
       state.onlineUsers = new Set(action.payload);
+      state.activeUsers = new Set(action.payload); // Keep activeUsers in sync
     },
     
     addOnlineUser: (state, action: PayloadAction<string>) => {
       state.onlineUsers.add(action.payload);
+      state.activeUsers.add(action.payload); // Keep activeUsers in sync
+      state.lastActivity[action.payload] = new Date();
     },
     
     removeOnlineUser: (state, action: PayloadAction<string>) => {
       state.onlineUsers.delete(action.payload);
+      state.activeUsers.delete(action.payload); // Keep activeUsers in sync
+      state.lastActivity[action.payload] = new Date();
+    },
+    
+    setActiveUsers: (state, action: PayloadAction<string[]>) => {
+      state.activeUsers = new Set(action.payload);
+      state.onlineUsers = new Set(action.payload); // Keep onlineUsers in sync
+    },
+    
+    addActiveUser: (state, action: PayloadAction<string>) => {
+      state.activeUsers.add(action.payload);
+      state.onlineUsers.add(action.payload); // Keep onlineUsers in sync
+      state.lastActivity[action.payload] = new Date();
+    },
+    
+    removeActiveUser: (state, action: PayloadAction<string>) => {
+      state.activeUsers.delete(action.payload);
+      state.onlineUsers.delete(action.payload); // Keep onlineUsers in sync
+      state.lastActivity[action.payload] = new Date();
     },
     
     clearSearchResults: (state) => {
@@ -263,23 +291,10 @@ const chatSlice = createSlice({
       if (!state.pinnedChats.includes(chatId)) {
         state.pinnedChats.push(chatId);
       }
-      
-      // Update chat object
-      const chat = state.chats.find(c => c.id === chatId);
-      if (chat) {
-        (chat as any).isPinned = true;
-      }
     },
     
     unpinChat: (state, action: PayloadAction<string>) => {
-      const chatId = action.payload;
-      state.pinnedChats = state.pinnedChats.filter(id => id !== chatId);
-      
-      // Update chat object
-      const chat = state.chats.find(c => c.id === chatId);
-      if (chat) {
-        (chat as any).isPinned = false;
-      }
+      state.pinnedChats = state.pinnedChats.filter(id => id !== action.payload);
     },
     
     archiveChat: (state, action: PayloadAction<string>) => {
@@ -287,42 +302,24 @@ const chatSlice = createSlice({
       if (!state.archivedChats.includes(chatId)) {
         state.archivedChats.push(chatId);
       }
-      
-      // Remove from main chats list
-      state.chats = state.chats.filter(c => c.id !== chatId);
-      
-      if (state.activeChat?.id === chatId) {
-        state.activeChat = null;
-      }
     },
     
-    unarchiveChat: (state, action: PayloadAction<Chat>) => {
-      const chat = action.payload;
-      state.archivedChats = state.archivedChats.filter(id => id !== chat.id);
-      
-      // Add back to main chats list
-      const existingChat = state.chats.find(c => c.id === chat.id);
-      if (!existingChat) {
-        state.chats.unshift(chat);
-      }
+    unarchiveChat: (state, action: PayloadAction<string>) => {
+      state.archivedChats = state.archivedChats.filter(id => id !== action.payload);
     },
     
-    updateMemberRole: (state, action: PayloadAction<{ 
-      chatId: string; 
-      userId: string; 
-      role: string; 
-    }>) => {
+    updateMemberRole: (state, action: PayloadAction<{ chatId: string; userId: string; role: string }>) => {
       const { chatId, userId, role } = action.payload;
       const chat = state.chats.find(c => c.id === chatId);
       
       if (chat) {
-        const member = chat.members.find(m => m.user.id === userId);
+        const member = chat.members && chat.members.find(m => m.user.id === userId);
         if (member) {
           member.role = role as any;
         }
       }
       
-      if (state.activeChat?.id === chatId) {
+      if (state.activeChat?.id === chatId && state.activeChat.members) {
         const member = state.activeChat.members.find(m => m.user.id === userId);
         if (member) {
           member.role = role as any;
@@ -334,11 +331,11 @@ const chatSlice = createSlice({
       const { chatId, userId } = action.payload;
       const chat = state.chats.find(c => c.id === chatId);
       
-      if (chat) {
+      if (chat && chat.members) {
         chat.members = chat.members.filter(m => m.user.id !== userId);
       }
       
-      if (state.activeChat?.id === chatId) {
+      if (state.activeChat?.id === chatId && state.activeChat.members) {
         state.activeChat.members = state.activeChat.members.filter(m => m.user.id !== userId);
       }
     },
@@ -347,19 +344,27 @@ const chatSlice = createSlice({
       const { chatId, member } = action.payload;
       const chat = state.chats.find(c => c.id === chatId);
       
-      if (chat) {
+      if (chat && chat.members) {
         const existingMember = chat.members.find(m => m.user.id === member.user.id);
         if (!existingMember) {
           chat.members.push(member);
         }
       }
       
-      if (state.activeChat?.id === chatId) {
+      if (state.activeChat?.id === chatId && state.activeChat.members) {
         const existingMember = state.activeChat.members.find(m => m.user.id === member.user.id);
         if (!existingMember) {
           state.activeChat.members.push(member);
         }
       }
+    },
+    
+    setConnectionStatus: (state, action: PayloadAction<'connected' | 'connecting' | 'disconnected'>) => {
+      state.connectionStatus = action.payload;
+    },
+    
+    updateLastActivity: (state, action: PayloadAction<{ userId: string; timestamp: Date }>) => {
+      state.lastActivity[action.payload.userId] = action.payload.timestamp;
     },
     
     clearError: (state) => {
@@ -381,9 +386,8 @@ const chatSlice = createSlice({
         
         return bTime - aTime;
       });
-    }
+    },
   },
-  
   extraReducers: (builder) => {
     // Fetch chats
     builder
@@ -394,16 +398,6 @@ const chatSlice = createSlice({
       .addCase(fetchChats.fulfilled, (state, action) => {
         state.isLoading = false;
         state.chats = action.payload;
-        
-        // Extract unread counts and pinned status
-        action.payload.forEach((chat: any) => {
-          if (chat.unreadCount) {
-            state.unreadCounts[chat.id] = chat.unreadCount;
-          }
-          if (chat.isPinned) {
-            state.pinnedChats.push(chat.id);
-          }
-        });
       })
       .addCase(fetchChats.rejected, (state, action) => {
         state.isLoading = false;
@@ -413,18 +407,20 @@ const chatSlice = createSlice({
     // Create direct chat
     builder
       .addCase(createDirectChat.fulfilled, (state, action) => {
-        const existingChat = state.chats.find(c => c.id === action.payload.id);
+        const newChat = action.payload;
+        const existingChat = state.chats.find(c => c.id === newChat.id);
         if (!existingChat) {
-          state.chats.unshift(action.payload);
+          state.chats.unshift(newChat);
         }
-        state.activeChat = action.payload;
+        state.activeChat = newChat;
       });
 
     // Create group chat
     builder
       .addCase(createGroupChat.fulfilled, (state, action) => {
-        state.chats.unshift(action.payload);
-        state.activeChat = action.payload;
+        const newChat = action.payload;
+        state.chats.unshift(newChat);
+        state.activeChat = newChat;
       });
 
     // Search users
@@ -441,17 +437,17 @@ const chatSlice = createSlice({
         state.error = action.payload as string;
       });
 
-    // Add members
+    // Add members to chat
     builder
       .addCase(addMembersToChat.fulfilled, (state, action) => {
         const { chatId, chat } = action.payload;
         const chatIndex = state.chats.findIndex(c => c.id === chatId);
         
-        if (chatIndex !== -1 && chat) {
+        if (chatIndex !== -1) {
           state.chats[chatIndex] = chat;
         }
         
-        if (state.activeChat?.id === chatId && chat) {
+        if (state.activeChat?.id === chatId) {
           state.activeChat = chat;
         }
       });
@@ -499,6 +495,9 @@ export const {
   setOnlineUsers,
   addOnlineUser,
   removeOnlineUser,
+  setActiveUsers,
+  addActiveUser,
+  removeActiveUser,
   clearSearchResults,
   setUnreadCount,
   markChatAsRead,
@@ -509,6 +508,8 @@ export const {
   updateMemberRole,
   removeMember,
   addMember,
+  setConnectionStatus,
+  updateLastActivity,
   clearError,
   sortChats
 } = chatSlice.actions;

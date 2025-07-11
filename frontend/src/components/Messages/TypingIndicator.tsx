@@ -12,13 +12,13 @@ const TypingIndicator: React.FC<TypingIndicatorProps> = ({ chatId, typingUserIds
   
   const activeChat = chats.find(chat => chat.id === chatId);
   
-  if (!activeChat || typingUserIds.length === 0) {
+  if (!activeChat || !activeChat.members || typingUserIds.length === 0) {
     return null;
   }
 
   const typingUsers = typingUserIds
     .map(userId => {
-      const member = activeChat.members.find(m => m.user.id === userId);
+      const member = activeChat.members && activeChat.members.find(m => m.user.id === userId);
       return member?.user;
     })
     .filter(Boolean);
