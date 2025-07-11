@@ -1,4 +1,4 @@
-# Backend Dockerfile - Fixed Version with TypeScript Error Handling
+# Backend Dockerfile - Clean Backend Only Version
 FROM node:18-alpine AS build
 
 WORKDIR /app
@@ -44,13 +44,16 @@ RUN apk add --no-cache dumb-init openssl
 RUN addgroup -g 1001 -S nodejs
 RUN adduser -S nodejs -u 1001
 
-# Copy built application
+# Copy built application (BACKEND ONLY)
 COPY --from=build --chown=nodejs:nodejs /app/dist ./dist
 COPY --from=build --chown=nodejs:nodejs /app/node_modules ./node_modules
 COPY --from=build --chown=nodejs:nodejs /app/package*.json ./
 COPY --from=build --chown=nodejs:nodejs /app/prisma ./prisma
-COPY --from=build /app/build /usr/share/nginx/html
-COPY ./nginx.conf /etc/nginx/conf.d/default.conf
+
+# REMOVED: Frontend-specific lines that were causing the error:
+# COPY --from=build /app/build /usr/share/nginx/html
+# COPY ./nginx.conf /etc/nginx/conf.d/default.conf
+
 USER nodejs
 
 EXPOSE 5000
