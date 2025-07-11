@@ -1,240 +1,115 @@
-// frontend/src/store/slices/chatSlice.ts - BRAND NEW FROM SCRATCH
+// frontend/src/store/slices/chatSlice.ts
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import { Chat, ChatMember, User } from '../../types';
-import { chatAPI, userAPI } from '../../services/api';
+import { chatAPI } from '../../services/api';
 
-// SAFE INITIAL STATE - Her property'i açık şekilde tanımlı
+interface Chat {
+  id: string;
+  name?: string;
+  type: 'DIRECT' | 'GROUP' | 'CHANNEL';
+  avatar?: string;
+  description?: string;
+  lastMessage?: string;
+  lastMessageAt?: string;
+  unreadCount: number;
+  isOnline?: boolean;
+  members?: any[];
+}
+
 interface ChatState {
   chats: Chat[];
   activeChat: Chat | null;
   isLoading: boolean;
   error: string | null;
-  // CRITICAL: Hem activeUsers hem onlineUsers tanımlı
-  activeUsers: Set<string>;
-  onlineUsers: Set<string>;
-  typingUsers: Record<string, string[]>;
-  searchResults: User[];
-  isSearching: boolean;
-  unreadCounts: Record<string, number>;
-  pinnedChats: string[];
-  archivedChats: string[];
+  onlineUsers: string[];
+  typingUsers: { [chatId: string]: any[] };
 }
 
-// SAFE DEFAULT STATE - Her değer güvenli
 const initialState: ChatState = {
   chats: [],
   activeChat: null,
   isLoading: false,
   error: null,
-  activeUsers: new Set<string>(),
-  onlineUsers: new Set<string>(),
+  onlineUsers: [],
   typingUsers: {},
-  searchResults: [],
-  isSearching: false,
-  unreadCounts: {},
-  pinnedChats: [],
-  archivedChats: []
 };
 
-// ASYNC THUNKS
 export const fetchChats = createAsyncThunk(
   'chats/fetchChats',
   async (_, { rejectWithValue }) => {
     try {
       const response = await chatAPI.getChats();
-      return response.data.chats || [];
+      return response.data.chats;
     } catch (error: any) {
-      console.error('Fetch chats error:', error);
       return rejectWithValue(error.response?.data?.error || 'Failed to fetch chats');
     }
   }
 );
 
-export const createDirectChat = createAsyncThunk(
-  'chats/createDirectChat',
-  async (userId: string, { rejectWithValue }) => {
-    try {
-      const response = await chatAPI.createChat({
-        type: 'DIRECT',
-        memberIds: [userId]
-      });
-      return response.data.chat;
-    } catch (error: any) {
-      console.error('Create direct chat error:', error);
-      return rejectWithValue(error.response?.data?.error || 'Failed to create chat');
-    }
-  }
-);
-
-export const searchUsers = createAsyncThunk(
-  'chats/searchUsers',
-  async (query: string, { rejectWithValue }) => {
-    try {
-      if (!query?.trim()) {
-        return [];
-      }
-      
-      const response = await userAPI.searchUsers(query, { limit: 20 });
-      return response.data.users || [];
-    } catch (error: any) {
-      console.error('Search users error:', error);
-      return rejectWithValue(error.response?.data?.error || 'Failed to search users');
-    }
-  }
-);
-
-// MAIN SLICE
 const chatSlice = createSlice({
   name: 'chats',
   initialState,
   reducers: {
-    // SAFE REDUCERS
     setActiveChat: (state, action: PayloadAction<Chat | null>) => {
       state.activeChat = action.payload;
-      if (action.payload?.id) {
-        state.unreadCounts[action.payload.id] = 0;
+    },
+    updateChatLastMessage: (state, action: PayloadAction<{
+      chatId: string;
+      lastMessage: string;
+      lastMessageAt: string;
+    }>) => {
+      const chat = state.chats.find(c => c.id === action.payload.chatId);
+      if (chat) {
+        chat.lastMessage = action.payload.lastMessage;
+        chat.lastMessageAt = action.payload.lastMessageAt;
       }
     },
-
-    clearActiveChat: (state) => {
-      state.activeChat = null;
-    },
-
-    // CRITICAL: activeUsers ve onlineUsers SYNC
-    setActiveUsers: (state, action: PayloadAction<string[]>) => {
-      const users = action.payload || [];
-      state.activeUsers = new Set(users);
-      state.onlineUsers = new Set(users); // SYNC
-    },
-
-    setOnlineUsers: (state, action: PayloadAction<string[]>) => {
-      const users = action.payload || [];
-      state.onlineUsers = new Set(users);
-      state.activeUsers = new Set(users); // SYNC
-    },
-
-    addActiveUser: (state, action: PayloadAction<string>) => {
-      if (action.payload) {
-        state.activeUsers.add(action.payload);
-        state.onlineUsers.add(action.payload); // SYNC
+    addUserTyping: (state, action: PayloadAction<{ chatId: string; user: any }>) => {
+      const { chatId, user } = action.payload;
+      if (!state.typingUsers[chatId]) {
+        state.typingUsers[chatId] = [];
+      }
+      const exists = state.typingUsers[chatId].find(u => u.id === user.id);
+      if (!exists) {
+        state.typingUsers[chatId].push(user);
       }
     },
-
-    addOnlineUser: (state, action: PayloadAction<string>) => {
-      if (action.payload) {
-        state.onlineUsers.add(action.payload);
-        state.activeUsers.add(action.payload); // SYNC
-      }
-    },
-
-    removeActiveUser: (state, action: PayloadAction<string>) => {
-      if (action.payload) {
-        state.activeUsers.delete(action.payload);
-        state.onlineUsers.delete(action.payload); // SYNC
-      }
-    },
-
-    removeOnlineUser: (state, action: PayloadAction<string>) => {
-      if (action.payload) {
-        state.onlineUsers.delete(action.payload);
-        state.activeUsers.delete(action.payload); // SYNC
-      }
-    },
-
-    // TYPING USERS
-    addUserTyping: (state, action: PayloadAction<{ chatId: string; userId: string }>) => {
-      const { chatId, userId } = action.payload;
-      if (chatId && userId) {
-        if (!state.typingUsers[chatId]) {
-          state.typingUsers[chatId] = [];
-        }
-        if (!state.typingUsers[chatId].includes(userId)) {
-          state.typingUsers[chatId].push(userId);
-        }
-      }
-    },
-
     removeUserTyping: (state, action: PayloadAction<{ chatId: string; userId: string }>) => {
       const { chatId, userId } = action.payload;
-      if (chatId && userId && state.typingUsers[chatId]) {
-        state.typingUsers[chatId] = state.typingUsers[chatId].filter(id => id !== userId);
-        if (state.typingUsers[chatId].length === 0) {
-          delete state.typingUsers[chatId];
-        }
+      if (state.typingUsers[chatId]) {
+        state.typingUsers[chatId] = state.typingUsers[chatId].filter(u => u.id !== userId);
       }
     },
-
-    clearTypingUsers: (state, action: PayloadAction<string>) => {
-      const chatId = action.payload;
-      if (chatId) {
-        delete state.typingUsers[chatId];
+    addOnlineUser: (state, action: PayloadAction<string>) => {
+      if (!state.onlineUsers.includes(action.payload)) {
+        state.onlineUsers.push(action.payload);
       }
     },
-
-    // CHAT MANAGEMENT
+    removeOnlineUser: (state, action: PayloadAction<string>) => {
+      state.onlineUsers = state.onlineUsers.filter(id => id !== action.payload);
+    },
     addNewChat: (state, action: PayloadAction<Chat>) => {
-      const newChat = action.payload;
-      if (newChat?.id) {
-        const existingIndex = state.chats.findIndex(c => c.id === newChat.id);
-        if (existingIndex === -1) {
-          state.chats.unshift(newChat);
-        }
-      }
+      state.chats.unshift(action.payload);
     },
-
     updateChat: (state, action: PayloadAction<Chat>) => {
-      const updatedChat = action.payload;
-      if (updatedChat?.id) {
-        const index = state.chats.findIndex(c => c.id === updatedChat.id);
-        if (index !== -1) {
-          state.chats[index] = updatedChat;
-        }
-        
-        if (state.activeChat?.id === updatedChat.id) {
-          state.activeChat = updatedChat;
-        }
+      const index = state.chats.findIndex(c => c.id === action.payload.id);
+      if (index !== -1) {
+        state.chats[index] = action.payload;
       }
     },
-
-    removeChat: (state, action: PayloadAction<string>) => {
-      const chatId = action.payload;
-      if (chatId) {
-        state.chats = state.chats.filter(c => c.id !== chatId);
-        if (state.activeChat?.id === chatId) {
-          state.activeChat = null;
-        }
-        delete state.unreadCounts[chatId];
+    addMember: (state, action: PayloadAction<{ chatId: string; user: any }>) => {
+      const chat = state.chats.find(c => c.id === action.payload.chatId);
+      if (chat && chat.members) {
+        chat.members.push(action.payload.user);
       }
     },
-
-    // SEARCH
-    clearSearchResults: (state) => {
-      state.searchResults = [];
-    },
-
-    // ERROR HANDLING
-    clearError: (state) => {
-      state.error = null;
-    },
-
-    // UNREAD COUNTS
-    setUnreadCount: (state, action: PayloadAction<{ chatId: string; count: number }>) => {
-      const { chatId, count } = action.payload;
-      if (chatId && typeof count === 'number') {
-        state.unreadCounts[chatId] = count;
+    removeMember: (state, action: PayloadAction<{ chatId: string; userId: string }>) => {
+      const chat = state.chats.find(c => c.id === action.payload.chatId);
+      if (chat && chat.members) {
+        chat.members = chat.members.filter(m => m.id !== action.payload.userId);
       }
     },
-
-    markChatAsRead: (state, action: PayloadAction<string>) => {
-      const chatId = action.payload;
-      if (chatId) {
-        state.unreadCounts[chatId] = 0;
-      }
-    }
   },
-
   extraReducers: (builder) => {
-    // FETCH CHATS
     builder
       .addCase(fetchChats.pending, (state) => {
         state.isLoading = true;
@@ -242,66 +117,202 @@ const chatSlice = createSlice({
       })
       .addCase(fetchChats.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.chats = action.payload || [];
-        state.error = null;
+        state.chats = action.payload;
       })
       .addCase(fetchChats.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.payload as string || 'Failed to fetch chats';
+        state.error = action.payload as string;
       });
-
-    // CREATE DIRECT CHAT
-    builder
-      .addCase(createDirectChat.fulfilled, (state, action) => {
-        const newChat = action.payload;
-        if (newChat?.id) {
-          const existingIndex = state.chats.findIndex(c => c.id === newChat.id);
-          if (existingIndex === -1) {
-            state.chats.unshift(newChat);
-          }
-          state.activeChat = newChat;
-        }
-      })
-      .addCase(createDirectChat.rejected, (state, action) => {
-        state.error = action.payload as string || 'Failed to create chat';
-      });
-
-    // SEARCH USERS
-    builder
-      .addCase(searchUsers.pending, (state) => {
-        state.isSearching = true;
-      })
-      .addCase(searchUsers.fulfilled, (state, action) => {
-        state.isSearching = false;
-        state.searchResults = action.payload || [];
-      })
-      .addCase(searchUsers.rejected, (state, action) => {
-        state.isSearching = false;
-        state.error = action.payload as string || 'Failed to search users';
-      });
-  }
+  },
 });
 
-// EXPORTS
 export const {
   setActiveChat,
-  clearActiveChat,
-  setActiveUsers,
-  setOnlineUsers,
-  addActiveUser,
-  addOnlineUser,
-  removeActiveUser,
-  removeOnlineUser,
+  updateChatLastMessage,
   addUserTyping,
   removeUserTyping,
-  clearTypingUsers,
+  addOnlineUser,
+  removeOnlineUser,
   addNewChat,
   updateChat,
-  removeChat,
-  clearSearchResults,
-  clearError,
-  setUnreadCount,
-  markChatAsRead
+  addMember,
+  removeMember,
 } = chatSlice.actions;
 
 export default chatSlice.reducer;
+
+// frontend/src/store/slices/messageSlice.ts
+import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+
+interface Message {
+  id: string;
+  content: string;
+  type: 'TEXT' | 'IMAGE' | 'FILE' | 'AUDIO' | 'VIDEO';
+  chatId: string;
+  senderId: string;
+  createdAt: string;
+  delivered: boolean;
+  read: boolean;
+  edited: boolean;
+  sender?: any;
+  replyTo?: any;
+}
+
+interface MessageState {
+  messages: { [chatId: string]: Message[] };
+  isLoading: boolean;
+  error: string | null;
+}
+
+const initialState: MessageState = {
+  messages: {},
+  isLoading: false,
+  error: null,
+};
+
+const messageSlice = createSlice({
+  name: 'messages',
+  initialState,
+  reducers: {
+    addMessage: (state, action: PayloadAction<Message>) => {
+      const { chatId } = action.payload;
+      if (!state.messages[chatId]) {
+        state.messages[chatId] = [];
+      }
+      state.messages[chatId].push(action.payload);
+    },
+    updateMessageStatus: (state, action: PayloadAction<{
+      messageId: string;
+      chatId?: string;
+      status: 'sent' | 'delivered' | 'read';
+      userId?: string;
+    }>) => {
+      const { messageId, chatId, status } = action.payload;
+      
+      if (chatId && state.messages[chatId]) {
+        const message = state.messages[chatId].find(m => m.id === messageId);
+        if (message) {
+          if (status === 'delivered') message.delivered = true;
+          if (status === 'read') message.read = true;
+        }
+      }
+    },
+    replaceTempMessage: (state, action: PayloadAction<{
+      tempId: string;
+      realMessage: Message;
+    }>) => {
+      const { tempId, realMessage } = action.payload;
+      const { chatId } = realMessage;
+      
+      if (state.messages[chatId]) {
+        const index = state.messages[chatId].findIndex(m => m.id === tempId);
+        if (index !== -1) {
+          state.messages[chatId][index] = realMessage;
+        }
+      }
+    },
+    addMessageReaction: (state, action: PayloadAction<any>) => {
+      // TODO: Implement message reactions
+    },
+    removeMessageReaction: (state, action: PayloadAction<any>) => {
+      // TODO: Implement message reactions
+    },
+    markChatMessagesAsRead: (state, action: PayloadAction<{
+      chatId: string;
+      messageIds: string[];
+    }>) => {
+      const { chatId, messageIds } = action.payload;
+      if (state.messages[chatId]) {
+        state.messages[chatId].forEach(message => {
+          if (messageIds.includes(message.id)) {
+            message.read = true;
+          }
+        });
+      }
+    },
+  },
+});
+
+export const {
+  addMessage,
+  updateMessageStatus,
+  replaceTempMessage,
+  addMessageReaction,
+  removeMessageReaction,
+  markChatMessagesAsRead,
+} = messageSlice.actions;
+
+export default messageSlice.reducer;
+
+// frontend/src/store/slices/uiSlice.ts
+import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+
+interface Notification {
+  id: string;
+  type: 'success' | 'error' | 'warning' | 'info';
+  title: string;
+  message: string;
+  duration?: number;
+}
+
+interface UIState {
+  darkMode: boolean;
+  sidebarOpen: boolean;
+  notifications: Notification[];
+  isConnected: boolean;
+  connectionStatus: 'connected' | 'connecting' | 'disconnected' | 'error';
+}
+
+const initialState: UIState = {
+  darkMode: localStorage.getItem('darkMode') === 'true',
+  sidebarOpen: true,
+  notifications: [],
+  isConnected: false,
+  connectionStatus: 'disconnected',
+};
+
+const uiSlice = createSlice({
+  name: 'ui',
+  initialState,
+  reducers: {
+    setDarkMode: (state, action: PayloadAction<boolean>) => {
+      state.darkMode = action.payload;
+      localStorage.setItem('darkMode', action.payload.toString());
+    },
+    toggleSidebar: (state) => {
+      state.sidebarOpen = !state.sidebarOpen;
+    },
+    setSidebarOpen: (state, action: PayloadAction<boolean>) => {
+      state.sidebarOpen = action.payload;
+    },
+    addNotification: (state, action: PayloadAction<Omit<Notification, 'id'>>) => {
+      const notification: Notification = {
+        ...action.payload,
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      };
+      state.notifications.push(notification);
+    },
+    removeNotification: (state, action: PayloadAction<string>) => {
+      state.notifications = state.notifications.filter(n => n.id !== action.payload);
+    },
+    clearAllNotifications: (state) => {
+      state.notifications = [];
+    },
+    setConnectionStatus: (state, action: PayloadAction<UIState['connectionStatus']>) => {
+      state.connectionStatus = action.payload;
+      state.isConnected = action.payload === 'connected';
+    },
+  },
+});
+
+export const {
+  setDarkMode,
+  toggleSidebar,
+  setSidebarOpen,
+  addNotification,
+  removeNotification,
+  clearAllNotifications,
+  setConnectionStatus,
+} = uiSlice.actions;
+
+export default uiSlice.reducer;

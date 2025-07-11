@@ -1,100 +1,61 @@
-// frontend/src/services/api.ts - Düzeltilmiş token handling
-
-import axios, { AxiosResponse } from 'axios';
+// frontend/src/services/api.ts - API service layer
+import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import { store } from '../store';
-import { logout, setTokens } from '../store/slices/authSlice';
+import { setTokens, logout } from '../store/slices/authSlice';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://justconnect-o8k8.onrender.com/api';
-
-const api = axios.create({
-  baseURL: API_BASE_URL,
+// Create axios instance
+const api: AxiosInstance = axios.create({
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api',
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 30000,
 });
 
-// Request interceptor - her request'te token ekle
+// Request interceptor to add auth token
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('accessToken');
-    console.log('🔑 Adding auth token to request:', config.url);
-    
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-      console.log('✅ Token added to request');
-    } else {
-      console.log('⚠️ No auth token found for request:', config.url);
     }
-    
     return config;
   },
   (error) => {
-    console.error('❌ Request interceptor error:', error);
     return Promise.reject(error);
   }
 );
 
-// Response interceptor - 403/401 hatalarını yakala
+// Response interceptor for token refresh
 api.interceptors.response.use(
-  (response: AxiosResponse) => {
-    console.log('✅ API Response:', response.config.url, response.status);
-    return response;
-  },
+  (response) => response,
   async (error) => {
-    console.error('❌ API Error:', error.config?.url, error.response?.status);
-    console.error('❌ Error details:', error.response?.data);
-    
     const originalRequest = error.config;
 
-    if ((error.response?.status === 401 || error.response?.status === 403) && !originalRequest._retry) {
+    if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
-      
-      console.log('🔄 Token expired, attempting refresh...');
-      
-      const refreshToken = localStorage.getItem('refreshToken');
-      
-      if (refreshToken) {
-        try {
-          console.log('🔄 Sending refresh request...');
-          
-          const refreshResponse = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-            refreshToken,
-          });
 
-          const { accessToken, refreshToken: newRefreshToken } = refreshResponse.data;
-          
-          console.log('✅ Token refreshed successfully');
-          
-          // Store'u güncelle
-          store.dispatch(setTokens({
-            accessToken,
-            refreshToken: newRefreshToken,
-          }));
+      try {
+        const refreshToken = localStorage.getItem('refreshToken');
+        if (refreshToken) {
+          const response = await axios.post(
+            `${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/auth/refresh`,
+            { refreshToken }
+          );
 
-          // LocalStorage'ı güncelle
+          const { accessToken, refreshToken: newRefreshToken } = response.data;
+          
           localStorage.setItem('accessToken', accessToken);
           localStorage.setItem('refreshToken', newRefreshToken);
+          
+          store.dispatch(setTokens({ accessToken, refreshToken: newRefreshToken }));
 
-          // Original request'i yeni token ile tekrar dene
+          // Retry original request with new token
           originalRequest.headers.Authorization = `Bearer ${accessToken}`;
           return api(originalRequest);
-          
-        } catch (refreshError) {
-          console.error('❌ Token refresh failed:', refreshError);
-          
-          // Refresh başarısız, logout et
-          store.dispatch(logout());
-          
-          // Login sayfasına yönlendir
-          window.location.href = '/login';
-          
-          return Promise.reject(refreshError);
         }
-      } else {
-        console.log('❌ No refresh token available');
-        
-        // Refresh token yok, logout et
+      } catch (refreshError) {
+        // Refresh failed, logout user
         store.dispatch(logout());
         window.location.href = '/login';
       }
@@ -104,11 +65,11 @@ api.interceptors.response.use(
   }
 );
 
-// API functions
+// Auth API
 export const authAPI = {
   login: (credentials: { email: string; password: string }) =>
     api.post('/auth/login', credentials),
-  
+
   register: (userData: {
     email: string;
     username: string;
@@ -116,99 +77,156 @@ export const authAPI = {
     lastName: string;
     password: string;
   }) => api.post('/auth/register', userData),
-  
-  refresh: (refreshToken: string) =>
+
+  refreshToken: (refreshToken: string) =>
     api.post('/auth/refresh', { refreshToken }),
-  
+
   logout: () => api.post('/auth/logout'),
+
+  forgotPassword: (email: string) =>
+    api.post('/auth/forgot-password', { email }),
+
+  resetPassword: (token: string, password: string) =>
+    api.post('/auth/reset-password', { token, password }),
 };
 
+// User API
 export const userAPI = {
   getCurrentUser: () => api.get('/users/me'),
-  
-  updateProfile: (userData: FormData) =>
-    api.put('/users/profile', userData, {
+
+  updateProfile: (data: FormData) =>
+    api.put('/users/me', data, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
-  
-  searchUsers: (query: string, options?: { limit?: number }) =>
-    api.get('/users/search', { 
-      params: { q: query, ...options } 
-    }),
-  
+
+  searchUsers: (query: string) =>
+    api.get(`/users/search?q=${encodeURIComponent(query)}`),
+
+  getUserById: (userId: string) => api.get(`/users/${userId}`),
+
   getFriends: () => api.get('/users/friends'),
-  
+
+  getFriendRequests: (type: 'sent' | 'received') =>
+    api.get(`/users/friend-requests?type=${type}`),
+
   sendFriendRequest: (userId: string) =>
-    api.post('/users/friend-request', { userId }),
-  
-  respondToFriendRequest: (friendshipId: string, action: 'accept' | 'reject') =>
-    api.post(`/users/friend-request/${friendshipId}/${action}`),
+    api.post('/users/friend-requests', { userId }),
+
+  respondToFriendRequest: (requestId: string, action: 'accept' | 'reject') =>
+    api.put(`/users/friend-requests/${requestId}`, { action }),
+
+  blockUser: (userId: string) => api.post(`/users/${userId}/block`),
+
+  unblockUser: (userId: string) => api.delete(`/users/${userId}/block`),
+
+  getBlockedUsers: () => api.get('/users/blocked'),
 };
 
+// Chat API
 export const chatAPI = {
   getChats: () => api.get('/chats'),
-  
-  createChat: (data: {
-    type: 'DIRECT' | 'GROUP' | 'CHANNEL';
-    memberIds: string[];
-    name?: string;
-    description?: string;
-  }) => api.post('/chats', data),
-  
-  getChatMembers: (chatId: string) =>
-    api.get(`/chats/${chatId}/members`),
+
+  getChatById: (chatId: string) => api.get(`/chats/${chatId}`),
+
+  createDirectChat: (userId: string) =>
+    api.post('/chats', { type: 'DIRECT', participantId: userId }),
+
+  createGroupChat: (name: string, description?: string, memberIds?: string[]) =>
+    api.post('/chats', {
+      type: 'GROUP',
+      name,
+      description,
+      memberIds,
+    }),
+
+  updateChat: (chatId: string, data: { name?: string; description?: string; avatar?: string }) =>
+    api.put(`/chats/${chatId}`, data),
+
+  deleteChat: (chatId: string) => api.delete(`/chats/${chatId}`),
+
+  addMembers: (chatId: string, memberIds: string[]) =>
+    api.post(`/chats/${chatId}/members`, { memberIds }),
+
+  removeMember: (chatId: string, memberId: string) =>
+    api.delete(`/chats/${chatId}/members/${memberId}`),
+
+  getChatMembers: (chatId: string) => api.get(`/chats/${chatId}/members`),
+
+  leaveChat: (chatId: string) => api.post(`/chats/${chatId}/leave`),
+
+  getChatSettings: (chatId: string) => api.get(`/chats/${chatId}/settings`),
+
+  updateChatSettings: (chatId: string, settings: any) =>
+    api.put(`/chats/${chatId}/settings`, settings),
 };
 
+// Message API
 export const messageAPI = {
-  getMessages: (chatId: string, options?: { 
-    page?: number; 
-    limit?: number; 
-    before?: string;
-  }) => {
-    console.log('🔍 API: Getting messages for chat:', chatId, options);
-    
-    // DÜZELTME: URLSearchParams yerine direkt query string oluştur
-    const queryParams: string[] = [];
-    
-    if (options?.page) {
-      queryParams.push(`page=${options.page}`);
-    }
-    if (options?.limit) {
-      queryParams.push(`limit=${options.limit}`);
-    }
-    if (options?.before) {
-      queryParams.push(`before=${encodeURIComponent(options.before)}`);
-    }
-    
-    const queryString = queryParams.length > 0 ? '?' + queryParams.join('&') : '';
-    const url = `/messages/chat/${chatId}${queryString}`;
-    
-    console.log('🌐 API URL:', url);
-    console.log('🔑 Token exists:', !!localStorage.getItem('accessToken'));
-    
-    return api.get(url);
-  },
-  
-  sendMessage: (messageData: {
+  getMessages: (chatId: string, page = 1, limit = 50) =>
+    api.get(`/messages/chat/${chatId}?page=${page}&limit=${limit}`),
+
+  sendMessage: (data: {
     chatId: string;
     content: string;
-    type?: string;
+    type?: 'TEXT' | 'IMAGE' | 'FILE' | 'AUDIO' | 'VIDEO';
     replyTo?: string;
-    fileId?: string;
-    tempId?: string;
-  }) => {
-    console.log('📤 API: Sending message:', messageData);
-    return api.post('/messages', messageData);
-  },
-  
+  }) => api.post('/messages', data),
+
   editMessage: (messageId: string, content: string) =>
     api.put(`/messages/${messageId}`, { content }),
-  
-  deleteMessage: (messageId: string) =>
-    api.delete(`/messages/${messageId}`),
-  
-  markAsRead: (chatId: string, messageIds: string[]) =>
-    api.post('/messages/mark-read', { chatId, messageIds }),
+
+  deleteMessage: (messageId: string) => api.delete(`/messages/${messageId}`),
+
+  markAsRead: (messageId: string) =>
+    api.post(`/messages/${messageId}/read`),
+
+  getMessageById: (messageId: string) => api.get(`/messages/${messageId}`),
+
+  searchMessages: (chatId: string, query: string) =>
+    api.get(`/messages/search?chatId=${chatId}&q=${encodeURIComponent(query)}`),
+
+  uploadFile: (file: File, chatId: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('chatId', chatId);
+    
+    return api.post('/messages/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  addReaction: (messageId: string, emoji: string) =>
+    api.post(`/messages/${messageId}/reactions`, { emoji }),
+
+  removeReaction: (messageId: string, emoji: string) =>
+    api.delete(`/messages/${messageId}/reactions/${emoji}`),
+};
+
+// Notification API
+export const notificationAPI = {
+  getNotifications: (page = 1, limit = 20) =>
+    api.get(`/notifications?page=${page}&limit=${limit}`),
+
+  markAsRead: (notificationId: string) =>
+    api.put(`/notifications/${notificationId}/read`),
+
+  markAllAsRead: () => api.put('/notifications/read-all'),
+
+  deleteNotification: (notificationId: string) =>
+    api.delete(`/notifications/${notificationId}`),
+
+  getUnreadCount: () => api.get('/notifications/unread-count'),
+
+  updateSettings: (settings: any) =>
+    api.put('/notifications/settings', settings),
+
+  getSettings: () => api.get('/notifications/settings'),
+};
+
+// Health check
+export const healthAPI = {
+  check: () => api.get('/health'),
+  ping: () => api.get('/ping'),
 };
 
 export default api;
