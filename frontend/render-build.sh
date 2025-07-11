@@ -65,9 +65,9 @@ services:
         destination: /index.html
     envVars:
       - key: REACT_APP_API_URL
-        value: https://justconnect-backend.onrender.com/api
+        value: https://justconnect-o8k8.onrender.com/api
       - key: REACT_APP_SOCKET_URL
-        value: https://justconnect-backend.onrender.com
+        value: https://justconnect-o8k8.onrender.com
       - key: REACT_APP_ENVIRONMENT
         value: production
       - key: CI
@@ -95,7 +95,7 @@ services:
       - key: JWT_REFRESH_SECRET
         generateValue: true
       - key: FRONTEND_URL
-        value: https://justconnect-frontend.onrender.com
+        value: https://justconnectui.onrender.com
 
 databases:
   - name: justconnect-db
