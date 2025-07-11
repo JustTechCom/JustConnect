@@ -5,7 +5,7 @@ import { RootState } from '../../store';
 import { logout } from '../../store/slices/authSlice';
 import { Chat } from '../../types';
 import ChatItem from './ChatItem';
-import { useUISelector } from '../../hooks/useTypedSelector';
+import { useAppSelector } from '../../hooks/useTypedSelector';
 
 
 import { 
@@ -47,7 +47,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const dispatch = useDispatch();
   const { user } = useSelector((state: RootState) => state.auth);
-  const { isDarkMode } = useUISelector(state => state.ui.isDarkMode);
+  const { isDarkMode } = useAppSelector(state => state.ui.isDarkMode);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNewChatModal, setShowNewChatModal] = useState(false);
   const [filter, setFilter] = useState<'all' | 'unread' | 'pinned'>('all');

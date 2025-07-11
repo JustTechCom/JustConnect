@@ -5,7 +5,7 @@ import { RootState } from '../store';
 import { fetchChats, setActiveChat } from '../store/slices/chatSlice';
 import { fetchMessages } from '../store/slices/messageSlice';
 import { useAuth } from '../hooks/useAuth';
-import { useUISelector } from '../hooks/useTypedSelector'; // Import the safe selector
+import { useAppSelector } from '../hooks/useTypedSelector'; // Import the safe selector
 import Sidebar from '../components/Sidebar/Sidebar';
 import ChatArea from '../components/Chat/ChatArea';
 import WelcomeScreen from '../components/Chat/WelcomeScreen';
@@ -27,7 +27,7 @@ const Dashboard: React.FC = () => {
   const { 
     sidebarOpen, 
     isDarkMode 
-  } = useUISelector(state => state.ui.isDarkMode);
+  } = useAppSelector(state => state.ui.isDarkMode);
 
   const [searchQuery, setSearchQuery] = useState('');
 
