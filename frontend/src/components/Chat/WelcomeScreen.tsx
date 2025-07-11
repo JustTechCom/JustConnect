@@ -211,7 +211,7 @@ const WelcomeScreen: React.FC = () => {
                     placeholder="Type your message here... 😊"
                     className="w-full p-4 bg-gray-50 dark:bg-gray-800 border-0 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-gray-900 dark:text-white placeholder-gray-500"
                     rows={3}
-                    disabled
+                    
                   />
                   
                   <div className="flex items-center justify-between mt-3">
