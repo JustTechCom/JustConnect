@@ -16,74 +16,40 @@ const ChatItem: React.FC<ChatItemProps> = ({ chat, isActive, onClick }) => {
   const { typingUsers, onlineUsers } = useSelector((state: RootState) => state.chats);
   const isTyping = typingUsers?.[chat.id]?.length > 0;
 
-  const getChatName = () => {
-    // 1. Chat'in kendi adı varsa
-    if (chat?.name) return chat.name;
-    
-    // 2. Direct chat için karşı taraftaki kullanıcı
-    if (chat?.type === 'DIRECT' && chat?.members?.length > 0) {
-      const otherMember = chat.members[0];
-      
-      // Güvenli null check'ler
-      if (otherMember?.user?.firstName && otherMember?.user?.lastName) {
-        return `${otherMember.user.firstName} ${otherMember.user.lastName}`;
-      }
-      
-      // Fallback: username varsa
-      if (otherMember?.user?.username) {
-        return `@${otherMember.user.username}`;
-      }
-      
-      // Fallback: email varsa
-      if (otherMember?.user?.email) {
-        return otherMember.user.email;
-      }
-    }
-    
-    // 3. Son fallback
-    return 'Unnamed Chat';
-  };
+ const getChatName = () => {
+  if (chat.name) return chat.name;
+  
+  if (chat.type === 'DIRECT' && chat.members && chat.members.length > 0) {
+    const otherMember = chat.members[0];
+    return `${otherMember.user.firstName} ${otherMember.user.lastName}`;
+  }
+  
+  return 'Unnamed Chat';
+};
 
   const getChatAvatar = () => {
-    // Chat'in kendi avatarı varsa
-    if (chat?.avatar) return chat.avatar;
-    
-    // Direct chat için karşı taraftaki kullanıcının avatarı
-    if (chat?.type === 'DIRECT' && chat?.members?.length > 0) {
-      const otherMember = chat.members[0];
-      return otherMember?.user?.avatar || '/default-avatar.png';
-    }
-    
-    // Grup sohbetleri için default
-    return '/default-group-avatar.png';
-  };
+  if (chat.avatar) return chat.avatar;
+  
+  if (chat.type === 'DIRECT' && chat.members && chat.members.length > 0) {
+    return chat.members[0].user.avatar || '/default-avatar.png';
+  }
+  
+  return '/default-group-avatar.png';
+};
 
-  const getLastMessagePreview = () => {
-    // Yazıyor durumu varsa
-    if (isTyping && typingUsers?.[chat.id]) {
-      const typingUsernames = typingUsers[chat.id]
-        ?.map(userId => {
-          const member = chat?.members?.find(m => m?.user?.id === userId);
-          return member?.user?.firstName || member?.user?.username || 'Someone';
-        })
-        .filter(Boolean) // undefined/null değerleri filtrele
-        .join(', ');
-      
-      return typingUsernames ? `${typingUsernames} yazıyor...` : 'Yazıyor...';
-    }
-    
-    // Backend'den gelen son mesaj (string format)
-    if (chat?.lastMessage) {
-      return chat.lastMessage;
-    }
-    
-    // Backend'den gelen son mesaj object (yeni format)
-    if ((chat as any)?.lastMessageObject?.content) {
-      return (chat as any).lastMessageObject.content;
-    }
-    
-    return 'Henüz mesaj yok';
-  };
+const getLastMessagePreview = () => {
+  if (isTyping) {
+    const typingUsernames = typingUsers[chat.id]
+      ?.map(userId => {
+        const member = chat.members && chat.members.find(m => m.user.id === userId);
+        return member?.user.firstName || 'Someone';
+      })
+      .join(', ');
+    return `${typingUsernames} yazıyor...`;
+  }
+  
+  return chat.lastMessage || 'Henüz mesaj yok';
+};
 
   const formatTime = (date: Date | string | undefined) => {
     if (!date) return '';
@@ -115,9 +81,9 @@ const ChatItem: React.FC<ChatItemProps> = ({ chat, isActive, onClick }) => {
     }
   };
 
-  const isOnline = chat?.type === 'DIRECT' && chat?.members?.length > 0 
-    ? onlineUsers?.has(chat.members[0]?.user?.id)
-    : false;
+ const isOnline = chat.type === 'DIRECT' && chat.members && chat.members.length > 0 
+  ? onlineUsers.has(chat.members[0].user.id)
+  : false;
 
   const unreadCount = (chat as any)?.unreadCount || 0;
 
