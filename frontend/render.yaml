@@ -15,6 +15,13 @@ services:
         value: https://justconnect-o8k8.onrender.com/api
       - key: REACT_APP_SOCKET_URL
         value: https://justconnect-o8k8.onrender.com
+    headers:
+      - source: "/socket.io/*"
+        headers:
+          - key: Connection
+            value: upgrade
+          - key: Upgrade
+            value: websocket
     healthCheckPath: /
     buildFilter:
       paths:
