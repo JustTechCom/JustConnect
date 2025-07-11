@@ -1,82 +1,61 @@
-// frontend/src/pages/Dashboard.tsx - Fixed with Error Handling
+// src/pages/Dashboard.tsx - Fixed with Safe Selectors
 import React, { useEffect, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../store';
 import { fetchChats, setActiveChat } from '../store/slices/chatSlice';
 import { fetchMessages } from '../store/slices/messageSlice';
 import { useAuth } from '../hooks/useAuth';
+import { useUISelector } from '../hooks/useTypedSelector'; // Import the safe selector
 import Sidebar from '../components/Sidebar/Sidebar';
 import ChatArea from '../components/Chat/ChatArea';
 import WelcomeScreen from '../components/Chat/WelcomeScreen';
-import FriendsPanel from '../components/Friends/FriendsPanel';
-import { 
-  Menu, 
-  Search, 
-  Settings, 
-  Moon, 
-  Sun, 
-  Users, 
-  MessageCircle,
-  Sparkles,
-  Zap,
-  AlertCircle
-} from 'lucide-react';
+import { Menu, Search, Settings, Moon, Sun } from 'lucide-react';
 import { toggleSidebar, toggleDarkMode } from '../store/slices/uiSlice';
 
 const Dashboard: React.FC = () => {
   const dispatch = useDispatch();
   const { user } = useAuth();
   
-  // Safe selectors with fallbacks
-  const chatsState = useSelector((state: RootState) => state.chats);
-  const uiState = useSelector((state: RootState) => state.ui);
+  // Use safe selectors
+  const { 
+    chats, 
+    activeChat, 
+    isLoading: chatsLoading 
+  } = useSelector((state: RootState) => state.chats || { chats: [], activeChat: null, isLoading: false });
   
-  const chats = chatsState?.chats || [];
-  const activeChat = chatsState?.activeChat || null;
-  const isLoading = chatsState?.isLoading || false;
-  const sidebarOpen = uiState?.sidebarOpen ?? true;
-  const isDarkMode = uiState?.isDarkMode ?? false;
+  // Use the safe UI selector
+  const { 
+    sidebarOpen, 
+    isDarkMode 
+  } = useUISelector();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [activePanel, setActivePanel] = useState<'chats' | 'friends'>('chats');
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    try {
-      if (user) {
-        dispatch(fetchChats() as any);
-      }
-    } catch (err) {
-      console.error('Error fetching chats:', err);
-      setError('Failed to load chats');
+    // Fetch user's chats on component mount
+    if (user) {
+      dispatch(fetchChats());
     }
   }, [dispatch, user]);
 
   useEffect(() => {
-    try {
-      if (activeChat?.id) {
-        dispatch(fetchMessages({ chatId: activeChat.id }) as any);
-      }
-    } catch (err) {
-      console.error('Error fetching messages:', err);
+    // Fetch messages when active chat changes
+    if (activeChat) {
+      dispatch(fetchMessages({ chatId: activeChat.id }));
     }
   }, [activeChat, dispatch]);
 
   const handleChatSelect = (chat: any) => {
-    try {
-      dispatch(setActiveChat(chat));
-    } catch (err) {
-      console.error('Error selecting chat:', err);
-    }
+    dispatch(setActiveChat(chat));
   };
 
-  const filteredChats = chats.filter(chat => {
+  const filteredChats = (chats || []).filter(chat => {
     if (!searchQuery) return true;
     
     const query = searchQuery.toLowerCase();
     return (
       chat.name?.toLowerCase().includes(query) ||
-      chat.members?.some((member: any) => 
+      (chat.members || []).some(member => 
         member.user?.firstName?.toLowerCase().includes(query) ||
         member.user?.lastName?.toLowerCase().includes(query) ||
         member.user?.username?.toLowerCase().includes(query)
@@ -84,237 +63,104 @@ const Dashboard: React.FC = () => {
     );
   });
 
-  // Error Boundary Component
-  if (error) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900 dark:to-red-800">
-        <div className="text-center p-8 bg-white dark:bg-gray-800 rounded-2xl shadow-lg max-w-md">
-          <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-            Something went wrong
-          </h2>
-          <p className="text-gray-600 dark:text-gray-300 mb-4">
-            {error}
-          </p>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-          >
-            Refresh Page
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className={`h-screen flex overflow-hidden ${isDarkMode ? 'dark' : ''}`}>
-      {/* Background with gradient */}
-      <div className="fixed inset-0 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-gray-900 dark:via-blue-900 dark:to-indigo-900" />
-      
-      {/* Animated background elements */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob" />
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gradient-to-r from-pink-400 to-red-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-2000" />
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-4000" />
-      </div>
-
-      {/* Main Content */}
-      <div className="relative flex w-full z-10">
-        
+    <div className={`h-screen flex ${isDarkMode ? 'dark' : ''}`}>
+      <div className="flex w-full bg-gray-50 dark:bg-gray-900">
         {/* Sidebar */}
         <div className={`${
           sidebarOpen ? 'w-80' : 'w-0'
-        } transition-all duration-500 ease-out flex-shrink-0 overflow-hidden backdrop-blur-sm`}>
-          <div className="h-full bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl border-r border-white/20 dark:border-gray-700/20">
-            {/* Sidebar Header */}
-            <div className="p-6 border-b border-white/20 dark:border-gray-700/20">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center space-x-3">
-                  <div className="relative">
-                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
-                      <MessageCircle className="w-6 h-6 text-white" />
-                    </div>
-                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white dark:border-gray-900 animate-pulse" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                      JustConnect
-                    </h2>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Professional Messaging</p>
-                  </div>
-                </div>
-                
-                <button
-                  onClick={() => dispatch(toggleDarkMode())}
-                  className="p-2 rounded-xl bg-white/50 dark:bg-gray-800/50 border border-white/20 dark:border-gray-700/20 hover:bg-white/70 dark:hover:bg-gray-800/70 transition-all duration-300 hover:scale-105"
-                >
-                  {isDarkMode ? (
-                    <Sun className="w-4 h-4 text-yellow-500" />
-                  ) : (
-                    <Moon className="w-4 h-4 text-indigo-600" />
-                  )}
-                </button>
-              </div>
-
-              {/* User Profile Card */}
-              {user && (
-                <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 dark:from-blue-500/20 dark:to-purple-500/20 rounded-2xl p-4 backdrop-blur-sm border border-white/30 dark:border-gray-700/30">
-                  <div className="flex items-center space-x-3">
-                    <div className="relative">
-                      <img
-                        src={user.avatar || `https://ui-avatars.com/api/?name=${user.firstName}+${user.lastName}&background=6366f1&color=ffffff&rounded=true&bold=true`}
-                        alt={user.firstName}
-                        className="w-12 h-12 rounded-xl object-cover border-2 border-white/50 dark:border-gray-700/50"
-                      />
-                      <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white dark:border-gray-900" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-gray-900 dark:text-white truncate">
-                        {user.firstName} {user.lastName}
-                      </h3>
-                      <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
-                        @{user.username}
-                      </p>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <Sparkles className="w-4 h-4 text-yellow-500" />
-                      <span className="text-xs font-medium text-yellow-600 dark:text-yellow-400">Pro</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Navigation Tabs */}
-            <div className="p-4">
-              <div className="flex bg-gray-100/60 dark:bg-gray-800/60 rounded-2xl p-1 backdrop-blur-sm">
-                <button
-                  onClick={() => setActivePanel('chats')}
-                  className={`flex-1 flex items-center justify-center space-x-2 py-3 px-4 rounded-xl transition-all duration-300 ${
-                    activePanel === 'chats'
-                      ? 'bg-white dark:bg-gray-700 shadow-lg text-blue-600 dark:text-blue-400'
-                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-                  }`}
-                >
-                  <MessageCircle className="w-4 h-4" />
-                  <span className="font-medium">Chats</span>
-                  {chats.length > 0 && (
-                    <span className="bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full">
-                      {chats.length}
-                    </span>
-                  )}
-                </button>
-                
-                <button
-                  onClick={() => setActivePanel('friends')}
-                  className={`flex-1 flex items-center justify-center space-x-2 py-3 px-4 rounded-xl transition-all duration-300 ${
-                    activePanel === 'friends'
-                      ? 'bg-white dark:bg-gray-700 shadow-lg text-purple-600 dark:text-purple-400'
-                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-                  }`}
-                >
-                  <Users className="w-4 h-4" />
-                  <span className="font-medium">Friends</span>
-                  <span className="bg-green-500 text-white text-xs px-2 py-0.5 rounded-full">
-                    5
-                  </span>
-                </button>
-              </div>
-            </div>
-
-            {/* Panel Content */}
-            <div className="flex-1 overflow-hidden">
-              {activePanel === 'chats' ? (
-                <Sidebar
-                  chats={filteredChats}
-                  activeChat={activeChat}
-                  onChatSelect={handleChatSelect}
-                  searchQuery={searchQuery}
-                  onSearchChange={setSearchQuery}
-                  isLoading={isLoading}
-                />
-              ) : (
-                <FriendsPanel />
-              )}
-            </div>
-          </div>
+        } transition-all duration-300 overflow-hidden border-r border-gray-200 dark:border-gray-700`}>
+          <Sidebar
+            chats={filteredChats}
+            activeChat={activeChat}
+            onChatSelect={handleChatSelect}
+            isLoading={chatsLoading}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+          />
         </div>
 
-        {/* Main Chat Area */}
+        {/* Main Content Area */}
         <div className="flex-1 flex flex-col">
-          {/* Top Header */}
-          <header className="bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl border-b border-white/20 dark:border-gray-700/20 px-6 py-4">
+          {/* Header */}
+          <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
                 <button
                   onClick={() => dispatch(toggleSidebar())}
-                  className="p-2 rounded-xl bg-white/50 dark:bg-gray-800/50 border border-white/20 dark:border-gray-700/20 hover:bg-white/70 dark:hover:bg-gray-800/70 transition-all duration-300 hover:scale-105"
+                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                 >
                   <Menu className="w-5 h-5 text-gray-600 dark:text-gray-300" />
                 </button>
-                
+
                 {activeChat && (
                   <div className="flex items-center space-x-3">
-                    <div className="relative">
-                      <img
-                        src={activeChat.avatar || `https://ui-avatars.com/api/?name=${activeChat.name || 'Chat'}&background=6366f1&color=ffffff&rounded=true&bold=true`}
-                        alt={activeChat.name || 'Chat'}
-                        className="w-10 h-10 rounded-xl object-cover border-2 border-white/50 dark:border-gray-700/50"
-                      />
-                      {activeChat.type === 'DIRECT' && activeChat.members?.length > 0 && (
-                        <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full ring-2 ring-white dark:ring-gray-900 ${
-                          activeChat.members[0]?.user?.isOnline ? 'bg-green-500' : 'bg-gray-400'
-                        }`} />
-                      )}
+                    <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
+                      <span className="text-white font-semibold">
+                        {activeChat.type === 'DIRECT' && activeChat.members?.[0]?.user
+                          ? `${activeChat.members[0].user.firstName?.[0] || ''}${activeChat.members[0].user.lastName?.[0] || ''}`
+                          : (activeChat.name?.[0] || 'C')}
+                      </span>
                     </div>
                     <div>
                       <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
-                        {activeChat.name || 
-                         (activeChat.type === 'DIRECT' && activeChat.members?.length > 0
-                           ? `${activeChat.members[0]?.user?.firstName} ${activeChat.members[0]?.user?.lastName}`
-                           : 'Unnamed Chat')}
+                        {activeChat.type === 'DIRECT' && activeChat.members?.[0]?.user
+                          ? `${activeChat.members[0].user.firstName || ''} ${activeChat.members[0].user.lastName || ''}`
+                          : (activeChat.name || 'Unnamed Chat')}
                       </h1>
-                      {activeChat.type === 'DIRECT' && activeChat.members?.length > 0 && (
-                        <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center space-x-1">
-                          <div className={`w-2 h-2 rounded-full ${
-                            activeChat.members[0]?.user?.isOnline ? 'bg-green-500' : 'bg-gray-400'
-                          }`} />
-                          <span>
-                            {activeChat.members[0]?.user?.isOnline ? 'Online' : 'Last seen recently'}
-                          </span>
+                      {activeChat.type === 'DIRECT' && activeChat.members?.[0]?.user && (
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          {activeChat.members[0].user.isOnline ? 'Çevrimiçi' : 'Çevrimdışı'}
                         </p>
                       )}
                     </div>
                   </div>
                 )}
               </div>
-              
-              <div className="flex items-center space-x-2">
-                {/* Search */}
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Search messages..."
-                    className="pl-10 pr-4 py-2 w-64 bg-white/50 dark:bg-gray-800/50 border border-white/20 dark:border-gray-700/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/30 backdrop-blur-sm text-sm"
-                  />
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                </div>
-                
-                {/* Quick Actions */}
-                <button className="p-2 rounded-xl bg-white/50 dark:bg-gray-800/50 border border-white/20 dark:border-gray-700/20 hover:bg-white/70 dark:hover:bg-gray-800/70 transition-all duration-300 hover:scale-105">
-                  <Zap className="w-5 h-5 text-orange-500" />
+
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={() => dispatch(toggleDarkMode())}
+                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  title={isDarkMode ? 'Açık moda geç' : 'Koyu moda geç'}
+                >
+                  {isDarkMode ? (
+                    <Sun className="w-5 h-5 text-yellow-500" />
+                  ) : (
+                    <Moon className="w-5 h-5 text-gray-600" />
+                  )}
                 </button>
-                
-                <button className="p-2 rounded-xl bg-white/50 dark:bg-gray-800/50 border border-white/20 dark:border-gray-700/20 hover:bg-white/70 dark:hover:bg-gray-800/70 transition-all duration-300 hover:scale-105">
+
+                <button className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                  <Search className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+                </button>
+
+                <button className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                   <Settings className="w-5 h-5 text-gray-600 dark:text-gray-300" />
                 </button>
+
+                {user && (
+                  <div className="flex items-center space-x-2">
+                    <img
+                      src={user.avatar || '/default-avatar.png'}
+                      alt={user.firstName || 'User'}
+                      className="w-8 h-8 rounded-full ring-2 ring-blue-500"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.src = '/default-avatar.png';
+                      }}
+                    />
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {user.firstName} {user.lastName}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </header>
 
-          {/* Chat Content */}
-          <div className="flex-1 relative">
+          {/* Chat Area */}
+          <div className="flex-1 overflow-hidden">
             {activeChat ? (
               <ChatArea chat={activeChat} />
             ) : (

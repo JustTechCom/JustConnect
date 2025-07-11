@@ -1,63 +1,30 @@
 {
   "short_name": "JustConnect",
-  "name": "JustConnect - Professional Messaging",
-  "description": "Modern real-time messaging application with professional features",
+  "name": "JustConnect - Mesajlaşma Uygulaması",
+  "description": "Arkadaşlarınızla güvenli ve hızlı mesajlaşın",
   "icons": [
     {
-      "src": "/favicon.ico",
+      "src": "favicon.ico",
       "sizes": "64x64 32x32 24x24 16x16",
       "type": "image/x-icon"
     },
     {
-      "src": "/icon-192.png",
+      "src": "logo192.png",
       "type": "image/png",
-      "sizes": "192x192",
-      "purpose": "any maskable"
+      "sizes": "192x192"
     },
     {
-      "src": "/icon-512.png",
+      "src": "logo512.png",
       "type": "image/png",
       "sizes": "512x512"
     }
   ],
   "start_url": "/",
   "display": "standalone",
-  "theme_color": "#3b82f6",
-  "background_color": "#ffffff",
   "orientation": "portrait-primary",
+  "theme_color": "#3B82F6",
+  "background_color": "#F8FAFC",
   "scope": "/",
-  "lang": "en",
-  "categories": ["communication", "social", "productivity"],
-  "screenshots": [
-    {
-      "src": "/screenshot-mobile.png",
-      "type": "image/png",
-      "sizes": "390x844",
-      "form_factor": "narrow"
-    },
-    {
-      "src": "/screenshot-desktop.png",
-      "type": "image/png", 
-      "sizes": "1920x1080",
-      "form_factor": "wide"
-    }
-  ],
-  "shortcuts": [
-    {
-      "name": "New Chat",
-      "short_name": "New Chat",
-      "description": "Start a new conversation",
-      "url": "/dashboard?action=new-chat",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
-    },
-    {
-      "name": "Friends",
-      "short_name": "Friends",
-      "description": "Manage your friends",
-      "url": "/dashboard?panel=friends",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
-    }
-  ],
-  "related_applications": [],
-  "prefer_related_applications": false
+  "lang": "tr",
+  "categories": ["communication", "social"]
 }
