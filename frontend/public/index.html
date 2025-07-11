@@ -1,189 +1,118 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#3B82F6" />
-    <meta name="description" content="JustConnect - Gerçek zamanlı mesajlaşma uygulaması" />
-    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
-    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-    
-    <!-- Open Graph Tags -->
-    <meta property="og:title" content="JustConnect - Mesajlaşma Uygulaması" />
-    <meta property="og:description" content="Arkadaşlarınızla güvenli ve hızlı mesajlaşın" />
-    <meta property="og:image" content="%PUBLIC_URL%/og-image.png" />
-    <meta property="og:url" content="https://justconnect.app" />
-    <meta property="og:type" content="website" />
-    
-    <!-- Twitter Card Tags -->
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="JustConnect - Mesajlaşma Uygulaması" />
-    <meta name="twitter:description" content="Arkadaşlarınızla güvenli ve hızlı mesajlaşın" />
-    <meta name="twitter:image" content="%PUBLIC_URL%/og-image.png" />
+    <meta name="theme-color" content="#3b82f6" />
+    <meta name="description" content="JustConnect - Professional Real-time Messaging Application" />
     
     <!-- PWA Meta Tags -->
+    <meta name="application-name" content="JustConnect" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="JustConnect" />
+    <meta name="format-detection" content="telephone=no" />
     <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="msapplication-config" content="%PUBLIC_URL%/browserconfig.xml" />
+    <meta name="msapplication-TileColor" content="#3b82f6" />
+    <meta name="msapplication-tap-highlight" content="no" />
     
-    <!-- Preconnect to important domains -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Apple Touch Icons -->
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/icon-192.png" />
     
-    <title>JustConnect - Mesajlaşma Uygulaması</title>
-  </head>
-  <body>
-    <noscript>
-      <div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;">
-        <h2>JavaScript Gerekli</h2>
-        <p>JustConnect'i kullanmak için JavaScript'i etkinleştirmeniz gerekiyor.</p>
-        <p>Lütfen tarayıcı ayarlarınızdan JavaScript'i etkinleştirin ve sayfayı yenileyin.</p>
-      </div>
-    </noscript>
+    <!-- Manifest -->
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
     
-    <!-- Loading Screen -->
-    <div id="loading-screen" style="
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      z-index: 9999;
-      color: white;
-      font-family: 'Inter', sans-serif;
-    ">
-      <div style="
-        width: 80px;
-        height: 80px;
-        background: rgba(255, 255, 255, 0.2);
-        border-radius: 50%;
+    <title>JustConnect - Professional Messaging</title>
+    
+    <!-- Preload fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+      /* Loading screen */
+      #initial-loader {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         display: flex;
         align-items: center;
         justify-content: center;
-        margin-bottom: 24px;
-        animation: pulse 2s infinite;
-      ">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-        </svg>
-      </div>
-      <h2 style="margin: 0 0 8px 0; font-size: 24px; font-weight: 600;">JustConnect</h2>
-      <p style="margin: 0; opacity: 0.8; font-size: 16px;">Yükleniyor...</p>
+        z-index: 9999;
+        font-family: 'Inter', sans-serif;
+      }
       
-      <style>
-        @keyframes pulse {
-          0%, 100% { transform: scale(1); opacity: 1; }
-          50% { transform: scale(1.1); opacity: 0.7; }
-        }
-      </style>
+      .loader-content {
+        text-align: center;
+        color: white;
+      }
+      
+      .loader-spinner {
+        width: 60px;
+        height: 60px;
+        border: 4px solid rgba(255, 255, 255, 0.3);
+        border-top: 4px solid white;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 20px;
+      }
+      
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      
+      .loader-text {
+        font-size: 24px;
+        font-weight: 600;
+        margin-bottom: 8px;
+      }
+      
+      .loader-subtitle {
+        font-size: 14px;
+        opacity: 0.8;
+      }
+    </style>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    
+    <!-- Loading Screen -->
+    <div id="initial-loader">
+      <div class="loader-content">
+        <div class="loader-spinner"></div>
+        <div class="loader-text">JustConnect</div>
+        <div class="loader-subtitle">Professional Messaging</div>
+      </div>
     </div>
     
     <div id="root"></div>
     
-    <!-- Hide loading screen when React loads -->
     <script>
-      window.addEventListener('DOMContentLoaded', function() {
-        // Hide loading screen after React app loads
+      // Remove loading screen when app loads
+      window.addEventListener('load', function() {
         setTimeout(function() {
-          var loadingScreen = document.getElementById('loading-screen');
-          if (loadingScreen) {
-            loadingScreen.style.opacity = '0';
-            loadingScreen.style.transition = 'opacity 0.5s ease-in-out';
+          const loader = document.getElementById('initial-loader');
+          if (loader) {
+            loader.style.opacity = '0';
+            loader.style.transition = 'opacity 0.5s ease-out';
             setTimeout(function() {
-              loadingScreen.style.display = 'none';
+              loader.remove();
             }, 500);
           }
         }, 1000);
       });
       
-      // Service Worker Registration
+      // Disable service worker registration for now
+      // This prevents the 404 error for sw.js
       if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function() {
-    navigator.serviceWorker.register('/sw.js', {
-      scope: '/'
-    })
-    .then(function(registration) {
-      console.log('SW registered: ', registration);
-    })
-    .catch(function(registrationError) {
-      console.log('SW registration failed: ', registrationError);
-      // SW registration başarısız olursa sessizce devam et
-    });
-  });
-}
-
-      
-      // Install PWA prompt
-      let deferredPrompt;
-      window.addEventListener('beforeinstallprompt', (e) => {
-        e.preventDefault();
-        deferredPrompt = e;
-        
-        // Show install button or banner
-        const installBanner = document.createElement('div');
-        installBanner.innerHTML = `
-          <div style="
-            position: fixed;
-            bottom: 20px;
-            left: 20px;
-            right: 20px;
-            background: #3B82F6;
-            color: white;
-            padding: 16px;
-            border-radius: 12px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            z-index: 1000;
-            font-family: 'Inter', sans-serif;
-          ">
-            <div>
-              <div style="font-weight: 600; margin-bottom: 4px;">JustConnect'i yükle</div>
-              <div style="font-size: 14px; opacity: 0.9;">Daha iyi deneyim için uygulamayı yükleyin</div>
-            </div>
-            <div>
-              <button onclick="this.parentElement.parentElement.parentElement.remove()" style="
-                background: rgba(255,255,255,0.2);
-                border: none;
-                color: white;
-                padding: 8px 12px;
-                border-radius: 6px;
-                margin-right: 8px;
-                cursor: pointer;
-              ">Şimdi değil</button>
-              <button onclick="installPWA()" style="
-                background: white;
-                border: none;
-                color: #3B82F6;
-                padding: 8px 16px;
-                border-radius: 6px;
-                font-weight: 600;
-                cursor: pointer;
-              ">Yükle</button>
-            </div>
-          </div>
-        `;
-        document.body.appendChild(installBanner);
-      });
-      
-      function installPWA() {
-        if (deferredPrompt) {
-          deferredPrompt.prompt();
-          deferredPrompt.userChoice.then((choiceResult) => {
-            if (choiceResult.outcome === 'accepted') {
-              console.log('User accepted the install prompt');
-            }
-            deferredPrompt = null;
-          });
-        }
+        // Uncomment below when you want to enable PWA
+        // navigator.serviceWorker.register('/sw.js');
       }
     </script>
   </body>

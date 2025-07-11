@@ -1,4 +1,4 @@
-// frontend/src/pages/Dashboard.tsx - Modern Professional Design
+// frontend/src/pages/Dashboard.tsx - Fixed with Error Handling
 import React, { useEffect, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../store';
@@ -18,38 +18,56 @@ import {
   Users, 
   MessageCircle,
   Sparkles,
-  Zap
+  Zap,
+  AlertCircle
 } from 'lucide-react';
 import { toggleSidebar, toggleDarkMode } from '../store/slices/uiSlice';
 
 const Dashboard: React.FC = () => {
   const dispatch = useDispatch();
   const { user } = useAuth();
-  const { 
-    chats, 
-    activeChat, 
-    isLoading: chatsLoading 
-  } = useSelector((state: RootState) => state.chats);
-  const { 
-    sidebarOpen, 
-    isDarkMode 
-  } = useSelector((state: RootState) => state.ui);
+  
+  // Safe selectors with fallbacks
+  const chatsState = useSelector((state: RootState) => state.chats);
+  const uiState = useSelector((state: RootState) => state.ui);
+  
+  const chats = chatsState?.chats || [];
+  const activeChat = chatsState?.activeChat || null;
+  const isLoading = chatsState?.isLoading || false;
+  const sidebarOpen = uiState?.sidebarOpen ?? true;
+  const isDarkMode = uiState?.isDarkMode ?? false;
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activePanel, setActivePanel] = useState<'chats' | 'friends'>('chats');
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    dispatch(fetchChats());
-  }, [dispatch]);
+    try {
+      if (user) {
+        dispatch(fetchChats() as any);
+      }
+    } catch (err) {
+      console.error('Error fetching chats:', err);
+      setError('Failed to load chats');
+    }
+  }, [dispatch, user]);
 
   useEffect(() => {
-    if (activeChat) {
-      dispatch(fetchMessages({ chatId: activeChat.id }));
+    try {
+      if (activeChat?.id) {
+        dispatch(fetchMessages({ chatId: activeChat.id }) as any);
+      }
+    } catch (err) {
+      console.error('Error fetching messages:', err);
     }
   }, [activeChat, dispatch]);
 
   const handleChatSelect = (chat: any) => {
-    dispatch(setActiveChat(chat));
+    try {
+      dispatch(setActiveChat(chat));
+    } catch (err) {
+      console.error('Error selecting chat:', err);
+    }
   };
 
   const filteredChats = chats.filter(chat => {
@@ -58,13 +76,36 @@ const Dashboard: React.FC = () => {
     const query = searchQuery.toLowerCase();
     return (
       chat.name?.toLowerCase().includes(query) ||
-      chat.members.some((member: any) => 
-        member.user.firstName.toLowerCase().includes(query) ||
-        member.user.lastName.toLowerCase().includes(query) ||
-        member.user.username.toLowerCase().includes(query)
+      chat.members?.some((member: any) => 
+        member.user?.firstName?.toLowerCase().includes(query) ||
+        member.user?.lastName?.toLowerCase().includes(query) ||
+        member.user?.username?.toLowerCase().includes(query)
       )
     );
   });
+
+  // Error Boundary Component
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900 dark:to-red-800">
+        <div className="text-center p-8 bg-white dark:bg-gray-800 rounded-2xl shadow-lg max-w-md">
+          <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+            Something went wrong
+          </h2>
+          <p className="text-gray-600 dark:text-gray-300 mb-4">
+            {error}
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+          >
+            Refresh Page
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`h-screen flex overflow-hidden ${isDarkMode ? 'dark' : ''}`}>
@@ -117,30 +158,32 @@ const Dashboard: React.FC = () => {
               </div>
 
               {/* User Profile Card */}
-              <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 dark:from-blue-500/20 dark:to-purple-500/20 rounded-2xl p-4 backdrop-blur-sm border border-white/30 dark:border-gray-700/30">
-                <div className="flex items-center space-x-3">
-                  <div className="relative">
-                    <img
-                      src={user?.avatar || `https://ui-avatars.com/api/?name=${user?.firstName}+${user?.lastName}&background=6366f1&color=ffffff&rounded=true&bold=true`}
-                      alt={user?.firstName}
-                      className="w-12 h-12 rounded-xl object-cover border-2 border-white/50 dark:border-gray-700/50"
-                    />
-                    <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white dark:border-gray-900" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-gray-900 dark:text-white truncate">
-                      {user?.firstName} {user?.lastName}
-                    </h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
-                      @{user?.username}
-                    </p>
-                  </div>
-                  <div className="flex items-center space-x-1">
-                    <Sparkles className="w-4 h-4 text-yellow-500" />
-                    <span className="text-xs font-medium text-yellow-600 dark:text-yellow-400">Pro</span>
+              {user && (
+                <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 dark:from-blue-500/20 dark:to-purple-500/20 rounded-2xl p-4 backdrop-blur-sm border border-white/30 dark:border-gray-700/30">
+                  <div className="flex items-center space-x-3">
+                    <div className="relative">
+                      <img
+                        src={user.avatar || `https://ui-avatars.com/api/?name=${user.firstName}+${user.lastName}&background=6366f1&color=ffffff&rounded=true&bold=true`}
+                        alt={user.firstName}
+                        className="w-12 h-12 rounded-xl object-cover border-2 border-white/50 dark:border-gray-700/50"
+                      />
+                      <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white dark:border-gray-900" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-gray-900 dark:text-white truncate">
+                        {user.firstName} {user.lastName}
+                      </h3>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                        @{user.username}
+                      </p>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <Sparkles className="w-4 h-4 text-yellow-500" />
+                      <span className="text-xs font-medium text-yellow-600 dark:text-yellow-400">Pro</span>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Navigation Tabs */}
@@ -189,7 +232,7 @@ const Dashboard: React.FC = () => {
                   onChatSelect={handleChatSelect}
                   searchQuery={searchQuery}
                   onSearchChange={setSearchQuery}
-                  isLoading={chatsLoading}
+                  isLoading={isLoading}
                 />
               ) : (
                 <FriendsPanel />
@@ -219,26 +262,26 @@ const Dashboard: React.FC = () => {
                         alt={activeChat.name || 'Chat'}
                         className="w-10 h-10 rounded-xl object-cover border-2 border-white/50 dark:border-gray-700/50"
                       />
-                      {activeChat.type === 'DIRECT' && activeChat.members.length > 0 && (
+                      {activeChat.type === 'DIRECT' && activeChat.members?.length > 0 && (
                         <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full ring-2 ring-white dark:ring-gray-900 ${
-                          activeChat.members[0].user.isOnline ? 'bg-green-500' : 'bg-gray-400'
+                          activeChat.members[0]?.user?.isOnline ? 'bg-green-500' : 'bg-gray-400'
                         }`} />
                       )}
                     </div>
                     <div>
                       <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
                         {activeChat.name || 
-                         (activeChat.type === 'DIRECT' && activeChat.members.length > 0
-                           ? `${activeChat.members[0].user.firstName} ${activeChat.members[0].user.lastName}`
+                         (activeChat.type === 'DIRECT' && activeChat.members?.length > 0
+                           ? `${activeChat.members[0]?.user?.firstName} ${activeChat.members[0]?.user?.lastName}`
                            : 'Unnamed Chat')}
                       </h1>
-                      {activeChat.type === 'DIRECT' && activeChat.members.length > 0 && (
+                      {activeChat.type === 'DIRECT' && activeChat.members?.length > 0 && (
                         <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center space-x-1">
                           <div className={`w-2 h-2 rounded-full ${
-                            activeChat.members[0].user.isOnline ? 'bg-green-500' : 'bg-gray-400'
+                            activeChat.members[0]?.user?.isOnline ? 'bg-green-500' : 'bg-gray-400'
                           }`} />
                           <span>
-                            {activeChat.members[0].user.isOnline ? 'Online' : 'Last seen recently'}
+                            {activeChat.members[0]?.user?.isOnline ? 'Online' : 'Last seen recently'}
                           </span>
                         </p>
                       )}
