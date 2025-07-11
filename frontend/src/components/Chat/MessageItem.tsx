@@ -24,7 +24,6 @@ import {
   Heart,
   ThumbsUp,
   Angry,
-  Sad,
   Laugh
 } from 'lucide-react';
 

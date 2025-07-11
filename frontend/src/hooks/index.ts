@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../store';
-import { setIsTyping } from '../store/slices/uiSlice';
+import setIsTyping from '../store/slices/uiSlice';
 import socketService from '../services/socketService';
 
 export const useTyping = (chatId: string | null) => {
@@ -68,7 +68,7 @@ export const useOnlineStatus = () => {
   const onlineUsers = useSelector((state: RootState) => {
     const chats = state.chats;
     if (!chats) return new Set<string>();
-    return chats.onlineUsers || chats.activeUsers || new Set<string>();
+    return chats.onlineUsers || new Set<string>();
   });
 
   const isUserOnline = (userId: string) => {
