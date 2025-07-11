@@ -25,9 +25,7 @@
     "react-intersection-observer": "^9.5.3",
     "emoji-picker-react": "^4.5.16",
     "react-dropzone": "^14.2.3",
-    "react-virtualized": "^9.22.5",
-    "react-window": "^1.8.8",
-    "workbox-webpack-plugin": "^7.0.0"
+    "serve": "^14.2.1"
   },
   "devDependencies": {
     "@types/node": "^20.10.5",
@@ -37,8 +35,6 @@
     "@tailwindcss/forms": "^0.5.7",
     "@tailwindcss/typography": "^0.5.10",
     "@tailwindcss/aspect-ratio": "^0.4.2",
-    "@types/react-virtualized": "^9.21.29",
-    "@types/react-window": "^1.8.8",
     "eslint": "^8.56.0",
     "eslint-config-react-app": "^7.0.1",
     "prettier": "^3.1.1",
@@ -46,18 +42,13 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "GENERATE_SOURCEMAP=false CI=false TSC_COMPILE_ON_ERROR=true ESLINT_NO_DEV_ERRORS=true react-scripts build",
-    "build-ignore-errors": "GENERATE_SOURCEMAP=false CI=false TSC_COMPILE_ON_ERROR=true ESLINT_NO_DEV_ERRORS=true DISABLE_ESLINT_PLUGIN=true react-scripts build",
-    "build-force": "GENERATE_SOURCEMAP=false CI=false TSC_COMPILE_ON_ERROR=true ESLINT_NO_DEV_ERRORS=true DISABLE_ESLINT_PLUGIN=true SKIP_PREFLIGHT_CHECK=true react-scripts build",
+    "build": "GENERATE_SOURCEMAP=false react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
+    "serve": "serve -s build -l $PORT",
     "lint": "eslint src --ext .ts,.tsx --fix",
-    "lint-quiet": "eslint src --ext .ts,.tsx --fix --quiet",
     "format": "prettier --write src/**/*.{ts,tsx,js,jsx,json,css,md}",
-    "type-check": "tsc --noEmit",
-    "type-check-relaxed": "tsc --noEmit --skipLibCheck",
-    "analyze": "npm run build && npx webpack-bundle-analyzer build/static/js/*.js",
-    "serve": "npm run build && npx serve -s build"
+    "type-check": "tsc --noEmit"
   },
   "eslintConfig": {
     "extends": [
@@ -66,11 +57,8 @@
     ],
     "rules": {
       "react-hooks/exhaustive-deps": "warn",
-      "react-hooks/rules-of-hooks": "warn",
       "@typescript-eslint/no-unused-vars": "warn",
-      "no-console": "warn",
-      "@typescript-eslint/no-explicit-any": "off",
-      "@typescript-eslint/ban-ts-comment": "off"
+      "no-console": "warn"
     }
   },
   "browserslist": {
@@ -85,8 +73,6 @@
       "last 1 safari version"
     ]
   },
-  "proxy": "http://localhost:5000",
-  "homepage": ".",
   "engines": {
     "node": ">=18.0.0",
     "npm": ">=8.0.0"

@@ -1,16 +1,24 @@
-# render.yaml
 services:
   - type: web
     name: justconnect-frontend
-    env: static
-    buildCommand: npm run build
-    staticPublishPath: ./build
-    headers:
-      - key: X-Frame-Options
-        value: DENY
-      - key: X-Content-Type-Options
-        value: nosniff
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
+    env: node
+    buildCommand: cd frontend && npm install && npm run build
+    startCommand: cd frontend && npx serve -s build -l $PORT
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: GENERATE_SOURCEMAP
+        value: false
+      - key: CI
+        value: false
+      - key: REACT_APP_API_URL
+        value: https://justconnect-o8k8.onrender.com/api
+      - key: REACT_APP_SOCKET_URL
+        value: https://justconnect-o8k8.onrender.com
+    healthCheckPath: /
+    buildFilter:
+      paths:
+        - frontend/**
+      ignoredPaths:
+        - "*.md"
+        - ".gitignore"
