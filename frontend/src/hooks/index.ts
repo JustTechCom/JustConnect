@@ -1,3 +1,4 @@
+// frontend/src/hooks/index.ts - EMERGENCY SAFE SELECTORS
 import { useEffect, useRef, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../store';
@@ -8,7 +9,9 @@ export const useTyping = (chatId: string | null) => {
   const dispatch = useDispatch();
   const [isTyping, setLocalIsTyping] = useState(false);
   const typingTimeoutRef = useRef<NodeJS.Timeout>();
-  const { typingUsers } = useSelector((state: RootState) => state.chats);
+  
+  // SAFE SELECTOR - with fallback
+  const typingUsers = useSelector((state: RootState) => state.chats?.typingUsers || {});
 
   const startTyping = () => {
     if (!chatId) return;
@@ -19,12 +22,10 @@ export const useTyping = (chatId: string | null) => {
       socketService.startTyping(chatId);
     }
 
-    // Clear previous timeout
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
 
-    // Stop typing after 3 seconds of inactivity
     typingTimeoutRef.current = setTimeout(() => {
       stopTyping();
     }, 3000);
@@ -63,7 +64,12 @@ export const useTyping = (chatId: string | null) => {
 };
 
 export const useOnlineStatus = () => {
-  const { onlineUsers } = useSelector((state: RootState) => state.chats);
+  // SAFE SELECTORS - with fallbacks
+  const onlineUsers = useSelector((state: RootState) => {
+    const chats = state.chats;
+    if (!chats) return new Set<string>();
+    return chats.onlineUsers || chats.activeUsers || new Set<string>();
+  });
 
   const isUserOnline = (userId: string) => {
     return onlineUsers.has(userId);
@@ -95,72 +101,19 @@ export const useNotifications = () => {
 
   const showNotification = (title: string, options?: NotificationOptions) => {
     if (permission === 'granted') {
-      return new Notification(title, {
-        icon: '/favicon.ico',
-        badge: '/badge-icon.png',
-        ...options,
-      });
+      new Notification(title, options);
     }
-    return null;
   };
 
   return {
     permission,
     requestPermission,
     showNotification,
-    isSupported: 'Notification' in window,
   };
 };
 
-export const useScrollToBottom = (dependency: any[]) => {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (ref.current) {
-      ref.current.scrollTop = ref.current.scrollHeight;
-    }
-  }, dependency);
-
-  const scrollToBottom = () => {
-    if (ref.current) {
-      ref.current.scrollTo({
-        top: ref.current.scrollHeight,
-        behavior: 'smooth',
-      });
-    }
-  };
-
-  return { ref, scrollToBottom };
-};
-
-export const useInfiniteScroll = (
-  callback: () => void,
-  hasMore: boolean,
-  loading: boolean
-) => {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const element = ref.current;
-    if (!element) return;
-
-    const handleScroll = () => {
-      if (loading || !hasMore) return;
-
-      if (element.scrollTop === 0) {
-        callback();
-      }
-    };
-
-    element.addEventListener('scroll', handleScroll);
-    return () => element.removeEventListener('scroll', handleScroll);
-  }, [callback, hasMore, loading]);
-
-  return ref;
-};
-
-export const useDebounce = <T>(value: T, delay: number): T => {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+export const useDebounce = (value: string, delay: number) => {
+  const [debouncedValue, setDebouncedValue] = useState(value);
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -175,67 +128,42 @@ export const useDebounce = <T>(value: T, delay: number): T => {
   return debouncedValue;
 };
 
-export const useLocalStorage = <T>(
-  key: string,
-  initialValue: T
-): [T, (value: T) => void] => {
-  const [storedValue, setStoredValue] = useState<T>(() => {
-    try {
-      const item = window.localStorage.getItem(key);
-      return item ? JSON.parse(item) : initialValue;
-    } catch (error) {
-      console.error(`Error reading localStorage key "${key}":`, error);
-      return initialValue;
-    }
-  });
+export const useScrollToBottom = (dependencies: any[] = []) => {
+  const ref = useRef<HTMLDivElement>(null);
 
-  const setValue = (value: T) => {
-    try {
-      setStoredValue(value);
-      window.localStorage.setItem(key, JSON.stringify(value));
-    } catch (error) {
-      console.error(`Error setting localStorage key "${key}":`, error);
+  const scrollToBottom = () => {
+    if (ref.current) {
+      ref.current.scrollIntoView({ behavior: 'smooth' });
     }
   };
 
-  return [storedValue, setValue];
-};
-
-export const useKeyboardShortcuts = (shortcuts: { [key: string]: () => void }) => {
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const { key, ctrlKey, metaKey, shiftKey, altKey } = event;
-      
-      // Build shortcut string
-      let shortcut = '';
-      if (ctrlKey || metaKey) shortcut += 'ctrl+';
-      if (shiftKey) shortcut += 'shift+';
-      if (altKey) shortcut += 'alt+';
-      shortcut += key.toLowerCase();
+    scrollToBottom();
+  }, dependencies);
 
-      if (shortcuts[shortcut]) {
-        event.preventDefault();
-        shortcuts[shortcut]();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [shortcuts]);
+  return { ref, scrollToBottom };
 };
 
-export const useClickOutside = (
-  ref: React.RefObject<HTMLElement>,
-  callback: () => void
+export const useInfiniteScroll = (
+  callback: () => void,
+  hasMore: boolean,
+  isLoading: boolean
 ) => {
+  const ref = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node)) {
+    const element = ref.current;
+    if (!element) return;
+
+    const handleScroll = () => {
+      if (element.scrollTop === 0 && hasMore && !isLoading) {
         callback();
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [ref, callback]);
+    element.addEventListener('scroll', handleScroll);
+    return () => element.removeEventListener('scroll', handleScroll);
+  }, [callback, hasMore, isLoading]);
+
+  return ref;
 };

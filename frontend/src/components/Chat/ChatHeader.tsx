@@ -22,7 +22,11 @@ interface ChatHeaderProps {
 }
 
 const ChatHeader: React.FC<ChatHeaderProps> = ({ chat }) => {
-  const { onlineUsers, typingUsers } = useSelector((state: RootState) => state.chats);
+  // SAFE SELECTORS with fallbacks
+  const chatsState = useSelector((state: RootState) => state.chats);
+  const onlineUsers = chatsState?.onlineUsers || chatsState?.activeUsers || new Set<string>();
+  const typingUsers = chatsState?.typingUsers || {};
+  
   const [showMenu, setShowMenu] = useState(false);
   const [showChatInfo, setShowChatInfo] = useState(false);
 
