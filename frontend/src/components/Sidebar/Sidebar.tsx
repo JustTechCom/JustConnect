@@ -5,7 +5,8 @@ import { RootState } from '../../store';
 import { logout } from '../../store/slices/authSlice';
 import { Chat } from '../../types';
 import ChatItem from './ChatItem';
-import { useUISelector } from '../../store/hooks/useTypedSelector'; // ✅
+import { useUISelector } from '@/store/hooks/useTypedSelector';
+
 
 import { 
   Search, 
