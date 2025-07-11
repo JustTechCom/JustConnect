@@ -22,7 +22,7 @@ const server = createServer(app);
 
 // CORS origins - hem production hem development
 const allowedOrigins = [
-  "https://justconnect-ui.onrender.com",  // Production frontend
+  "https://justconnectui.onrender.com",  // Production frontend
   "http://localhost:3000",                // Development frontend
   "https://justconnect-o8k8.onrender.com" // Backend itself (if needed)
 ];
