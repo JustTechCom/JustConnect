@@ -27,7 +27,7 @@ const Dashboard: React.FC = () => {
   const { 
     sidebarOpen, 
     isDarkMode 
-  } = useUISelector();
+  } = useUISelector(state => state.ui.isDarkMode);
 
   const [searchQuery, setSearchQuery] = useState('');
 

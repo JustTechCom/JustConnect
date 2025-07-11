@@ -46,7 +46,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const dispatch = useDispatch();
   const { user } = useSelector((state: RootState) => state.auth);
-  const { isDarkMode } = useUISelector();
+  const { isDarkMode } = useUISelector(state => state.ui.isDarkMode);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNewChatModal, setShowNewChatModal] = useState(false);
   const [filter, setFilter] = useState<'all' | 'unread' | 'pinned'>('all');
