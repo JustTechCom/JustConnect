@@ -1,451 +1,439 @@
-// backend/src/services/socketService.ts - Fixed version
-import { Server as HTTPServer } from 'http';
-import { Server as SocketIOServer, Socket } from 'socket.io';
+// backend/src/services/socketService.ts - Complete socket service with proper exports
+import { Server, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '../config/database';
+import { redis } from '../config/redis';
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
-  user?: {
+  userData?: {
     id: string;
     firstName: string;
     lastName: string;
-    avatar?: string; // Changed from string | null to string | undefined
+    avatar?: string;
   };
 }
 
-interface TypingUser {
-  userId: string;
-  socketId: string;
-  chatId: string;
-  timestamp: Date;
-}
+// Store active connections
+const activeConnections = new Map<string, Set<string>>(); // userId -> Set of socketIds
+const socketToUser = new Map<string, string>(); // socketId -> userId
 
-interface MessageData {
-  chatId: string;
-  content: string;
-  type?: 'TEXT' | 'IMAGE' | 'FILE' | 'AUDIO' | 'VIDEO' | 'LOCATION';
-  replyTo?: string;
-  tempId?: string;
-}
+export const setupSocketHandlers = (io: Server): void => {
+  console.log('🔌 Setting up socket handlers...');
 
-class SocketService {
-  private io: SocketIOServer;
-  private connectedUsers: Map<string, string> = new Map(); // userId -> socketId
-  private typingUsers: Map<string, TypingUser> = new Map(); // socketId -> TypingUser
-  private typingTimeouts: Map<string, NodeJS.Timeout> = new Map(); // socketId -> timeout
+  // Authentication middleware
+  io.use(async (socket: AuthenticatedSocket, next) => {
+    try {
+      const token = socket.handshake.auth.token || 
+                   socket.handshake.headers.authorization?.replace('Bearer ', '');
+      
+      if (!token) {
+        return next(new Error('No token provided'));
+      }
 
-  // ✨ Fix burada
-constructor(io: SocketIOServer) {
-  this.io = io;
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret') as any;
+      
+      // Get user data
+      const user = await prisma.user.findUnique({
+        where: { id: decoded.id || decoded.userId },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          avatar: true,
+          banned: true
+        }
+      });
 
-  this.setupMiddleware();
-  this.setupEventHandlers();
-}
+      if (!user || user.banned) {
+        return next(new Error('User not found or banned'));
+      }
 
+      socket.userId = user.id;
+      socket.userData = user;
+      
+      next();
+    } catch (error) {
+      console.error('Socket authentication error:', error);
+      next(new Error('Authentication failed'));
+    }
+  });
 
-  private setupMiddleware() {
-    this.io.use(async (socket: AuthenticatedSocket, next) => {
+  io.on('connection', async (socket: AuthenticatedSocket) => {
+    const userId = socket.userId!;
+    const userData = socket.userData!;
+
+    console.log(`🔌 User ${userData.firstName} ${userData.lastName} connected (${userId})`);
+
+    try {
+      // Track connection
+      if (!activeConnections.has(userId)) {
+        activeConnections.set(userId, new Set());
+      }
+      activeConnections.get(userId)!.add(socket.id);
+      socketToUser.set(socket.id, userId);
+
+      // Join user's personal room
+      socket.join(`user_${userId}`);
+
+      // Set user online in database
+      await prisma.user.update({
+        where: { id: userId },
+        data: { 
+          isOnline: true,
+          lastSeen: new Date()
+        }
+      });
+
+      // Get user's chats and join them
+      const userChats = await prisma.chatMember.findMany({
+        where: { userId },
+        select: { chatId: true }
+      });
+
+      userChats.forEach(({ chatId }) => {
+        socket.join(`chat_${chatId}`);
+      });
+
+      // Emit successful connection
+      socket.emit('connected', {
+        message: 'Connected successfully',
+        user: userData,
+        timestamp: new Date()
+      });
+
+      // Notify friends about online status
+      await notifyFriendsOnlineStatus(userId, true);
+
+    } catch (error) {
+      console.error('Connection setup error:', error);
+      socket.emit('error', { message: 'Connection setup failed' });
+    }
+
+    // Join chats handler
+    socket.on('join_chats', async () => {
       try {
-        const token = socket.handshake.auth.token;
-        
-        if (!token) {
-          return next(new Error('Authentication token required'));
-        }
-
-        const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
-        
-        // Fetch user details
-        const user = await prisma.user.findUnique({
-          where: { id: decoded.userId },
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            avatar: true,
-            banned: true
-          }
+        const userChats = await prisma.chatMember.findMany({
+          where: { userId },
+          select: { chatId: true }
         });
 
-        if (!user || user.banned) {
-          return next(new Error('User not found or banned'));
-        }
-
-        socket.userId = user.id;
-        socket.user = {
-          id: user.id,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          avatar: user.avatar || undefined // Fixed: Convert null to undefined
-        };
-
-        // Update user online status
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { isOnline: true, lastSeen: new Date() }
+        userChats.forEach(({ chatId }) => {
+          socket.join(`chat_${chatId}`);
         });
 
-        next();
+        console.log(`📱 User ${userId} joined ${userChats.length} chats`);
       } catch (error) {
-        console.error('Socket authentication error:', error);
-        next(new Error('Authentication failed'));
+        console.error('Join chats error:', error);
       }
     });
-  }
 
-  private setupEventHandlers() {
-    this.io.on('connection', (socket: AuthenticatedSocket) => {
-      console.log(`✅ User ${socket.userId} connected`);
-      
-      if (socket.userId) {
-        this.connectedUsers.set(socket.userId, socket.id);
-        this.broadcastUserOnline(socket.userId);
-      }
+    // Send message handler
+    socket.on('send_message', async (data) => {
+      try {
+        const { chatId, content, type = 'TEXT', replyTo, tempId } = data;
 
-      // Join user's chats
-      socket.on('join_chats', async () => {
-        try {
-          if (!socket.userId) return;
+        console.log(`📤 Message from ${userId} to chat ${chatId}: ${content}`);
 
-          const userChats = await prisma.chatMember.findMany({
-            where: { userId: socket.userId },
-            select: { chatId: true }
-          });
+        // Verify user is member of chat
+        const membership = await prisma.chatMember.findFirst({
+          where: { chatId, userId }
+        });
 
-          for (const chat of userChats) {
-            socket.join(`chat:${chat.chatId}`);
-          }
-
-          socket.emit('chats_joined', { 
-            success: true, 
-            chatCount: userChats.length 
-          });
-
-          console.log(`📱 User ${socket.userId} joined ${userChats.length} chats`);
-        } catch (error) {
-          console.error('Error joining chats:', error);
-          socket.emit('error', { message: 'Failed to join chats' });
+        if (!membership) {
+          socket.emit('error', { message: 'Not a member of this chat' });
+          return;
         }
-      });
 
-      // Join specific chat
-      socket.on('join_chat', ({ chatId }) => {
-        socket.join(`chat:${chatId}`);
-        console.log(`📱 User ${socket.userId} joined chat ${chatId}`);
-      });
-
-      // Leave specific chat
-      socket.on('leave_chat', ({ chatId }) => {
-        socket.leave(`chat:${chatId}`);
-        console.log(`📱 User ${socket.userId} left chat ${chatId}`);
-      });
-
-      // Handle new message
-      socket.on('send_message', async (data: MessageData) => {
-        try {
-          if (!socket.userId) return;
-
-          // Validate chat membership
-          const membership = await prisma.chatMember.findFirst({
-            where: {
-              chatId: data.chatId,
-              userId: socket.userId
-            }
-          });
-
-          if (!membership) {
-            socket.emit('error', { message: 'You are not a member of this chat' });
-            return;
-          }
-
-          // Create message in database
-          const message = await prisma.message.create({
-            data: {
-              content: data.content,
-              type: data.type || 'TEXT',
-              chatId: data.chatId,
-              senderId: socket.userId,
-              replyTo: data.replyTo || null
+        // Create message
+        const message = await prisma.message.create({
+          data: {
+            content,
+            type,
+            chatId,
+            senderId: userId,
+            replyTo: replyTo || undefined
+          },
+          include: {
+            sender: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                avatar: true
+              }
             },
-            include: {
-              sender: {
-                select: {
-                  id: true,
-                  username: true,
-                  firstName: true,
-                  lastName: true,
-                  avatar: true
-                }
-              },
-              replyToMessage: {
-                include: {
-                  sender: {
-                    select: {
-                      id: true,
-                      username: true,
-                      firstName: true,
-                      lastName: true
-                    }
+            replyToMessage: replyTo ? {
+              select: {
+                id: true,
+                content: true,
+                sender: {
+                  select: {
+                    firstName: true,
+                    lastName: true
                   }
                 }
               }
-            }
-          });
-
-          // Update chat's last message
-          await prisma.chat.update({
-            where: { id: data.chatId },
-            data: { updatedAt: new Date() }
-          });
-
-          // Stop typing for this user
-          this.handleStopTyping(socket, data.chatId);
-
-          // Broadcast to chat members
-          this.io.to(`chat:${data.chatId}`).emit('new_message', message);
-
-          // Send confirmation to sender
-          socket.emit('message_sent', { 
-            message, 
-            tempId: data.tempId 
-          });
-
-          console.log(`📨 Message sent by ${socket.userId} in chat ${data.chatId}`);
-        } catch (error) {
-          console.error('Error sending message:', error);
-          socket.emit('error', { message: 'Failed to send message' });
-        }
-      });
-
-      // Handle typing events
-      socket.on('typing_start', ({ chatId }) => {
-        this.handleStartTyping(socket, chatId);
-      });
-
-      socket.on('typing_stop', ({ chatId }) => {
-        this.handleStopTyping(socket, chatId);
-      });
-
-      // Handle message status updates
-      socket.on('message_delivered', async ({ messageId, chatId }) => {
-        try {
-          if (!socket.userId) return;
-
-          // Update message delivery status
-          await prisma.message.update({
-            where: { id: messageId },
-            data: { delivered: true }
-          });
-
-          // Notify sender
-          socket.to(`chat:${chatId}`).emit('message_status_updated', {
-            messageId,
-            chatId,
-            status: 'delivered',
-            deliveredBy: socket.userId
-          });
-        } catch (error) {
-          console.error('Error updating message delivery:', error);
-        }
-      });
-
-      socket.on('message_read', async ({ messageId, chatId }) => {
-        try {
-          if (!socket.userId) return;
-
-          // Update message read status
-          await prisma.message.update({
-            where: { id: messageId },
-            data: { 
-              read: true,
-              delivered: true 
-            }
-          });
-
-          // Notify sender
-          socket.to(`chat:${chatId}`).emit('message_status_updated', {
-            messageId,
-            chatId,
-            status: 'read',
-            readBy: socket.userId
-          });
-        } catch (error) {
-          console.error('Error updating message read status:', error);
-        }
-      });
-
-      // Handle friend requests
-      socket.on('send_friend_request', async ({ targetUserId }) => {
-        try {
-          if (!socket.userId) return;
-
-          const targetSocketId = this.connectedUsers.get(targetUserId);
-          if (targetSocketId && socket.user) {
-            this.io.to(targetSocketId).emit('friend_request_received', {
-              requester: socket.user,
-              requesterId: socket.userId
-            });
+            } : false
           }
-        } catch (error) {
-          console.error('Error sending friend request notification:', error);
-        }
-      });
+        });
 
-      // Handle disconnection
-      socket.on('disconnect', async () => {
-        console.log(`❌ User ${socket.userId} disconnected`);
-        
-        if (socket.userId) {
-          // Remove from connected users
-          this.connectedUsers.delete(socket.userId);
-          
-          // Clear typing status
-          this.clearAllTypingForUser(socket);
-          
-          // Update user offline status
-          await prisma.user.update({
-            where: { id: socket.userId },
-            data: { isOnline: false, lastSeen: new Date() }
-          }).catch(console.error);
+        // Update chat's last message
+        await prisma.chat.update({
+          where: { id: chatId },
+          data: {
+            lastMessage: content,
+            lastMessageAt: new Date()
+          }
+        });
 
-          // Broadcast user offline
-          this.broadcastUserOffline(socket.userId);
-        }
-      });
+        // Broadcast to chat members
+        io.to(`chat_${chatId}`).emit('new_message', message);
 
-      // Emit connected event
-      socket.emit('connected', { 
-        success: true, 
-        userId: socket.userId,
-        user: socket.user 
-      });
-    });
-  }
+        // Send confirmation to sender
+        socket.emit('message_sent', { tempId, message });
 
-  private handleStartTyping(socket: AuthenticatedSocket, chatId: string) {
-    if (!socket.userId) return;
-
-    const typingKey = `${socket.id}:${chatId}`;
-    
-    // Clear existing timeout
-    const existingTimeout = this.typingTimeouts.get(typingKey);
-    if (existingTimeout) {
-      clearTimeout(existingTimeout);
-    }
-
-    // Add to typing users
-    this.typingUsers.set(typingKey, {
-      userId: socket.userId,
-      socketId: socket.id,
-      chatId,
-      timestamp: new Date()
-    });
-
-    // Broadcast typing status
-    socket.to(`chat:${chatId}`).emit('user_typing', {
-      userId: socket.userId,
-      chatId,
-      user: socket.user
-    });
-
-    // Set auto-stop timeout (10 seconds)
-    const timeout = setTimeout(() => {
-      this.handleStopTyping(socket, chatId);
-    }, 10000);
-
-    this.typingTimeouts.set(typingKey, timeout);
-  }
-
-  private handleStopTyping(socket: AuthenticatedSocket, chatId: string) {
-    if (!socket.userId) return;
-
-    const typingKey = `${socket.id}:${chatId}`;
-    
-    // Clear timeout
-    const existingTimeout = this.typingTimeouts.get(typingKey);
-    if (existingTimeout) {
-      clearTimeout(existingTimeout);
-      this.typingTimeouts.delete(typingKey);
-    }
-
-    // Remove from typing users
-    if (this.typingUsers.has(typingKey)) {
-      this.typingUsers.delete(typingKey);
-      
-      // Broadcast stop typing
-      socket.to(`chat:${chatId}`).emit('user_stopped_typing', {
-        userId: socket.userId,
-        chatId
-      });
-    }
-  }
-
-  private clearAllTypingForUser(socket: AuthenticatedSocket) {
-    const userTypingKeys = Array.from(this.typingUsers.keys())
-      .filter(key => key.startsWith(socket.id));
-
-    for (const key of userTypingKeys) {
-      const typingUser = this.typingUsers.get(key);
-      if (typingUser) {
-        // Clear timeout
-        const timeout = this.typingTimeouts.get(key);
-        if (timeout) {
-          clearTimeout(timeout);
-          this.typingTimeouts.delete(key);
+        // Cache message for quick retrieval
+        if (redis) {
+          await redis.setex(
+            `message:${message.id}`,
+            3600, // 1 hour
+            JSON.stringify(message)
+          );
         }
 
-        // Remove from typing
-        this.typingUsers.delete(key);
+      } catch (error) {
+        console.error('Send message error:', error);
+        socket.emit('error', { message: 'Failed to send message' });
+      }
+    });
 
-        // Broadcast stop typing
-        socket.to(`chat:${typingUser.chatId}`).emit('user_stopped_typing', {
-          userId: typingUser.userId,
-          chatId: typingUser.chatId
+    // Typing events
+    socket.on('typing_start', (data) => {
+      const { chatId } = data;
+      socket.to(`chat_${chatId}`).emit('user_typing', {
+        chatId,
+        user: userData
+      });
+    });
+
+    socket.on('typing_stop', (data) => {
+      const { chatId } = data;
+      socket.to(`chat_${chatId}`).emit('user_stopped_typing', {
+        chatId,
+        userId
+      });
+    });
+
+    // Message status handlers
+    socket.on('mark_messages_read', async (data) => {
+      try {
+        const { chatId } = data;
+
+        // Update unread messages to read
+        const updatedMessages = await prisma.message.updateMany({
+          where: {
+            chatId,
+            senderId: { not: userId },
+            read: false
+          },
+          data: { read: true }
+        });
+
+        if (updatedMessages.count > 0) {
+          // Notify chat about read status
+          socket.to(`chat_${chatId}`).emit('messages_read', {
+            chatId,
+            readBy: userId,
+            messageCount: updatedMessages.count
+          });
+        }
+
+      } catch (error) {
+        console.error('Mark messages read error:', error);
+      }
+    });
+
+    // Join specific chat
+    socket.on('join_chat', async (data) => {
+      try {
+        const { chatId } = data;
+
+        // Verify membership
+        const membership = await prisma.chatMember.findFirst({
+          where: { chatId, userId }
+        });
+
+        if (membership) {
+          socket.join(`chat_${chatId}`);
+          console.log(`📱 User ${userId} joined chat ${chatId}`);
+        }
+      } catch (error) {
+        console.error('Join chat error:', error);
+      }
+    });
+
+    // Leave specific chat
+    socket.on('leave_chat', (data) => {
+      const { chatId } = data;
+      socket.leave(`chat_${chatId}`);
+      console.log(`👋 User ${userId} left chat ${chatId}`);
+    });
+
+    // Friend request handlers
+    socket.on('send_friend_request', async (data) => {
+      try {
+        const { targetUserId } = data;
+
+        if (targetUserId === userId) {
+          socket.emit('error', { message: 'Cannot send friend request to yourself' });
+          return;
+        }
+
+        // Check if already friends or request exists
+        const existingRelation = await prisma.friendship.findFirst({
+          where: {
+            OR: [
+              { requesterId: userId, addresseeId: targetUserId },
+              { requesterId: targetUserId, addresseeId: userId }
+            ]
+          }
+        });
+
+        if (existingRelation) {
+          socket.emit('error', { message: 'Friend request already exists or you are already friends' });
+          return;
+        }
+
+        // Create friend request
+        const friendship = await prisma.friendship.create({
+          data: {
+            requesterId: userId,
+            addresseeId: targetUserId,
+            status: 'PENDING'
+          },
+          include: {
+            requester: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                avatar: true
+              }
+            }
+          }
+        });
+
+        // Notify target user
+        io.to(`user_${targetUserId}`).emit('friend_request_received', {
+          friendship,
+          requester: friendship.requester
+        });
+
+        socket.emit('friend_request_sent', { friendship });
+
+      } catch (error) {
+        console.error('Send friend request error:', error);
+        socket.emit('error', { message: 'Failed to send friend request' });
+      }
+    });
+
+    // Disconnect handler
+    socket.on('disconnect', async (reason) => {
+      try {
+        console.log(`🔌 User ${userId} disconnected: ${reason}`);
+
+        // Remove from tracking
+        if (activeConnections.has(userId)) {
+          activeConnections.get(userId)!.delete(socket.id);
+          if (activeConnections.get(userId)!.size === 0) {
+            activeConnections.delete(userId);
+            
+            // Set user offline if no more connections
+            await prisma.user.update({
+              where: { id: userId },
+              data: { 
+                isOnline: false,
+                lastSeen: new Date()
+              }
+            });
+
+            // Notify friends about offline status
+            await notifyFriendsOnlineStatus(userId, false);
+          }
+        }
+
+        socketToUser.delete(socket.id);
+
+      } catch (error) {
+        console.error('Disconnect error:', error);
+      }
+    });
+
+    // Error handler
+    socket.on('error', (error) => {
+      console.error('Socket error:', error);
+    });
+  });
+
+  console.log('✅ Socket handlers setup complete');
+};
+
+// Helper function to notify friends about online status
+async function notifyFriendsOnlineStatus(userId: string, isOnline: boolean): Promise<void> {
+  try {
+    // Get user's friends
+    const friendships = await prisma.friendship.findMany({
+      where: {
+        OR: [
+          { requesterId: userId, status: 'ACCEPTED' },
+          { addresseeId: userId, status: 'ACCEPTED' }
+        ]
+      }
+    });
+
+    const friendIds = friendships.map(f => 
+      f.requesterId === userId ? f.addresseeId : f.requesterId
+    );
+
+    // Notify each online friend
+    friendIds.forEach(friendId => {
+      if (activeConnections.has(friendId)) {
+        const io = require('../app').io;
+        io.to(`user_${friendId}`).emit('friend_status_changed', {
+          userId,
+          isOnline,
+          timestamp: new Date()
         });
       }
-    }
-  }
-
-  private broadcastUserOnline(userId: string) {
-    this.io.emit('user_online', userId);
-  }
-
-  private broadcastUserOffline(userId: string) {
-    this.io.emit('user_offline', userId);
-  }
-
-  // Public methods for external use
-  public sendToUser(userId: string, event: string, data: any) {
-    const socketId = this.connectedUsers.get(userId);
-    if (socketId) {
-      this.io.to(socketId).emit(event, data);
-      return true;
-    }
-    return false;
-  }
-
-  public sendToChat(chatId: string, event: string, data: any) {
-    this.io.to(`chat:${chatId}`).emit(event, data);
-  }
-
-  public isUserOnline(userId: string): boolean {
-    return this.connectedUsers.has(userId);
-  }
-
-  public getOnlineUsers(): string[] {
-    return Array.from(this.connectedUsers.keys());
-  }
-
-  public getConnectedUserCount(): number {
-    return this.connectedUsers.size;
-  }
-
-  public getTypingUsersInChat(chatId: string): TypingUser[] {
-    return Array.from(this.typingUsers.values())
-      .filter(user => user.chatId === chatId);
+    });
+  } catch (error) {
+    console.error('Notify friends online status error:', error);
   }
 }
 
-export default SocketService;
+// Utility functions for external use
+export const getActiveUsers = (): string[] => {
+  return Array.from(activeConnections.keys());
+};
+
+export const isUserOnline = (userId: string): boolean => {
+  return activeConnections.has(userId);
+};
+
+export const getUserSocketIds = (userId: string): string[] => {
+  return Array.from(activeConnections.get(userId) || []);
+};
+
+export const broadcastToUser = (userId: string, event: string, data: any): void => {
+  const io = require('../app').io;
+  io.to(`user_${userId}`).emit(event, data);
+};
+
+export const broadcastToChat = (chatId: string, event: string, data: any): void => {
+  const io = require('../app').io;
+  io.to(`chat_${chatId}`).emit(event, data);
+};
+
+// Default export for convenience
+export default { setupSocketHandlers };
