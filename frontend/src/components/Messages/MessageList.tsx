@@ -206,10 +206,11 @@ const MessageList: React.FC<MessageListProps> = ({
                 <div className={`animate-slide-up ${
                   message.senderId === user?.id ? 'animate-slide-right' : 'animate-slide-left'
                 }`}>
-                  <MessageItem
+                 <MessageItem
                     message={message}
+                    currentUser={user}  // Bu satırı ekle
                     isOwn={message.senderId === user?.id}
-                    showAvatar={shouldShowAvatar(message, index, dayMessages)}
+                    showAvatar={shouldShowAvatar(message, index)}
                     chat={chat}
                   />
                 </div>

@@ -29,14 +29,13 @@ import {
 
 interface MessageItemProps {
   message: Message;
-  currentUser: User;
-  previousMessage?: Message;
-  nextMessage?: Message;
-  isGroupChat?: boolean;
+  currentUser?: any;  // Bu satırı ekle
+  isOwn: boolean;
+  showAvatar: boolean;
+  chat: Chat;
   onReply?: (message: Message) => void;
   onEdit?: (message: Message) => void;
   onDelete?: (messageId: string) => void;
-  onReaction?: (messageId: string, emoji: string) => void;
 }
 
 const MessageItem: React.FC<MessageItemProps> = ({
