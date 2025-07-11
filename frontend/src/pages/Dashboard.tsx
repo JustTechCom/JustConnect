@@ -1,244 +1,282 @@
-// frontend/src/pages/Dashboard.tsx - Eksik ana sayfa
+// frontend/src/pages/Dashboard.tsx - Modern Professional Design
 import React, { useEffect, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../store';
-import { useNavigate } from 'react-router-dom';
+import { fetchChats, setActiveChat } from '../store/slices/chatSlice';
+import { fetchMessages } from '../store/slices/messageSlice';
+import { useAuth } from '../hooks/useAuth';
+import Sidebar from '../components/Sidebar/Sidebar';
+import ChatArea from '../components/Chat/ChatArea';
+import WelcomeScreen from '../components/Chat/WelcomeScreen';
+import FriendsPanel from '../components/Friends/FriendsPanel';
 import { 
-  MessageCircle, 
-  Users, 
+  Menu, 
+  Search, 
   Settings, 
-  Search,
-  Plus,
-  User,
-  LogOut
+  Moon, 
+  Sun, 
+  Users, 
+  MessageCircle,
+  Sparkles,
+  Zap
 } from 'lucide-react';
+import { toggleSidebar, toggleDarkMode } from '../store/slices/uiSlice';
 
 const Dashboard: React.FC = () => {
-  const navigate = useNavigate();
   const dispatch = useDispatch();
-  const { user } = useSelector((state: RootState) => state.auth);
-  const [activeTab, setActiveTab] = useState('chats');
+  const { user } = useAuth();
+  const { 
+    chats, 
+    activeChat, 
+    isLoading: chatsLoading 
+  } = useSelector((state: RootState) => state.chats);
+  const { 
+    sidebarOpen, 
+    isDarkMode 
+  } = useSelector((state: RootState) => state.ui);
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    window.location.href = '/login';
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activePanel, setActivePanel] = useState<'chats' | 'friends'>('chats');
+
+  useEffect(() => {
+    dispatch(fetchChats());
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (activeChat) {
+      dispatch(fetchMessages({ chatId: activeChat.id }));
+    }
+  }, [activeChat, dispatch]);
+
+  const handleChatSelect = (chat: any) => {
+    dispatch(setActiveChat(chat));
   };
 
+  const filteredChats = chats.filter(chat => {
+    if (!searchQuery) return true;
+    
+    const query = searchQuery.toLowerCase();
+    return (
+      chat.name?.toLowerCase().includes(query) ||
+      chat.members.some((member: any) => 
+        member.user.firstName.toLowerCase().includes(query) ||
+        member.user.lastName.toLowerCase().includes(query) ||
+        member.user.username.toLowerCase().includes(query)
+      )
+    );
+  });
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <MessageCircle className="h-8 w-8 text-blue-600" />
+    <div className={`h-screen flex overflow-hidden ${isDarkMode ? 'dark' : ''}`}>
+      {/* Background with gradient */}
+      <div className="fixed inset-0 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-gray-900 dark:via-blue-900 dark:to-indigo-900" />
+      
+      {/* Animated background elements */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob" />
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gradient-to-r from-pink-400 to-red-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-2000" />
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-4000" />
+      </div>
+
+      {/* Main Content */}
+      <div className="relative flex w-full z-10">
+        
+        {/* Sidebar */}
+        <div className={`${
+          sidebarOpen ? 'w-80' : 'w-0'
+        } transition-all duration-500 ease-out flex-shrink-0 overflow-hidden backdrop-blur-sm`}>
+          <div className="h-full bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl border-r border-white/20 dark:border-gray-700/20">
+            {/* Sidebar Header */}
+            <div className="p-6 border-b border-white/20 dark:border-gray-700/20">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center space-x-3">
+                  <div className="relative">
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
+                      <MessageCircle className="w-6 h-6 text-white" />
+                    </div>
+                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white dark:border-gray-900 animate-pulse" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                      JustConnect
+                    </h2>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Professional Messaging</p>
+                  </div>
+                </div>
+                
+                <button
+                  onClick={() => dispatch(toggleDarkMode())}
+                  className="p-2 rounded-xl bg-white/50 dark:bg-gray-800/50 border border-white/20 dark:border-gray-700/20 hover:bg-white/70 dark:hover:bg-gray-800/70 transition-all duration-300 hover:scale-105"
+                >
+                  {isDarkMode ? (
+                    <Sun className="w-4 h-4 text-yellow-500" />
+                  ) : (
+                    <Moon className="w-4 h-4 text-indigo-600" />
+                  )}
+                </button>
               </div>
-              <h1 className="ml-3 text-xl font-semibold text-gray-900 dark:text-white">
-                JustConnect
-              </h1>
+
+              {/* User Profile Card */}
+              <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 dark:from-blue-500/20 dark:to-purple-500/20 rounded-2xl p-4 backdrop-blur-sm border border-white/30 dark:border-gray-700/30">
+                <div className="flex items-center space-x-3">
+                  <div className="relative">
+                    <img
+                      src={user?.avatar || `https://ui-avatars.com/api/?name=${user?.firstName}+${user?.lastName}&background=6366f1&color=ffffff&rounded=true&bold=true`}
+                      alt={user?.firstName}
+                      className="w-12 h-12 rounded-xl object-cover border-2 border-white/50 dark:border-gray-700/50"
+                    />
+                    <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white dark:border-gray-900" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-gray-900 dark:text-white truncate">
+                      {user?.firstName} {user?.lastName}
+                    </h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                      @{user?.username}
+                    </p>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <Sparkles className="w-4 h-4 text-yellow-500" />
+                    <span className="text-xs font-medium text-yellow-600 dark:text-yellow-400">Pro</span>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => navigate('/profile')}
-                className="flex items-center space-x-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
-              >
-                <User className="h-5 w-5" />
-                <span className="hidden md:block">
-                  {user?.firstName} {user?.lastName}
-                </span>
-              </button>
-              
-              <button
-                onClick={handleLogout}
-                className="flex items-center space-x-2 text-red-600 hover:text-red-700"
-              >
-                <LogOut className="h-5 w-5" />
-                <span className="hidden md:block">Çıkış</span>
-              </button>
+            {/* Navigation Tabs */}
+            <div className="p-4">
+              <div className="flex bg-gray-100/60 dark:bg-gray-800/60 rounded-2xl p-1 backdrop-blur-sm">
+                <button
+                  onClick={() => setActivePanel('chats')}
+                  className={`flex-1 flex items-center justify-center space-x-2 py-3 px-4 rounded-xl transition-all duration-300 ${
+                    activePanel === 'chats'
+                      ? 'bg-white dark:bg-gray-700 shadow-lg text-blue-600 dark:text-blue-400'
+                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                  }`}
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  <span className="font-medium">Chats</span>
+                  {chats.length > 0 && (
+                    <span className="bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full">
+                      {chats.length}
+                    </span>
+                  )}
+                </button>
+                
+                <button
+                  onClick={() => setActivePanel('friends')}
+                  className={`flex-1 flex items-center justify-center space-x-2 py-3 px-4 rounded-xl transition-all duration-300 ${
+                    activePanel === 'friends'
+                      ? 'bg-white dark:bg-gray-700 shadow-lg text-purple-600 dark:text-purple-400'
+                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                  }`}
+                >
+                  <Users className="w-4 h-4" />
+                  <span className="font-medium">Friends</span>
+                  <span className="bg-green-500 text-white text-xs px-2 py-0.5 rounded-full">
+                    5
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            {/* Panel Content */}
+            <div className="flex-1 overflow-hidden">
+              {activePanel === 'chats' ? (
+                <Sidebar
+                  chats={filteredChats}
+                  activeChat={activeChat}
+                  onChatSelect={handleChatSelect}
+                  searchQuery={searchQuery}
+                  onSearchChange={setSearchQuery}
+                  isLoading={chatsLoading}
+                />
+              ) : (
+                <FriendsPanel />
+              )}
             </div>
           </div>
         </div>
-      </header>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
-          {/* Sidebar */}
-          <div className="lg:col-span-1">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
-              <nav className="space-y-2">
+        {/* Main Chat Area */}
+        <div className="flex-1 flex flex-col">
+          {/* Top Header */}
+          <header className="bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl border-b border-white/20 dark:border-gray-700/20 px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
                 <button
-                  onClick={() => setActiveTab('chats')}
-                  className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md text-left ${
-                    activeTab === 'chats'
-                      ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                  }`}
+                  onClick={() => dispatch(toggleSidebar())}
+                  className="p-2 rounded-xl bg-white/50 dark:bg-gray-800/50 border border-white/20 dark:border-gray-700/20 hover:bg-white/70 dark:hover:bg-gray-800/70 transition-all duration-300 hover:scale-105"
                 >
-                  <MessageCircle className="h-5 w-5" />
-                  <span>Sohbetler</span>
+                  <Menu className="w-5 h-5 text-gray-600 dark:text-gray-300" />
                 </button>
                 
-                <button
-                  onClick={() => setActiveTab('contacts')}
-                  className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md text-left ${
-                    activeTab === 'contacts'
-                      ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                  }`}
-                >
-                  <Users className="h-5 w-5" />
-                  <span>Kişiler</span>
-                </button>
-                
-                <button
-                  onClick={() => setActiveTab('settings')}
-                  className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md text-left ${
-                    activeTab === 'settings'
-                      ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                  }`}
-                >
-                  <Settings className="h-5 w-5" />
-                  <span>Ayarlar</span>
-                </button>
-              </nav>
-            </div>
-          </div>
-
-          {/* Main Content Area */}
-          <div className="lg:col-span-2">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm min-h-[600px]">
-              
-              {activeTab === 'chats' && (
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      Sohbetler
-                    </h2>
-                    <button className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
-                      <Plus className="h-4 w-4" />
-                      <span>Yeni Sohbet</span>
-                    </button>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="text-center py-12">
-                      <MessageCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                      <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                        Henüz sohbet yok
-                      </h3>
-                      <p className="text-gray-500 dark:text-gray-400 mb-4">
-                        Arkadaşlarınızla sohbet etmeye başlamak için yeni bir sohbet başlatın
-                      </p>
-                      <button className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700">
-                        İlk Sohbeti Başlat
-                      </button>
+                {activeChat && (
+                  <div className="flex items-center space-x-3">
+                    <div className="relative">
+                      <img
+                        src={activeChat.avatar || `https://ui-avatars.com/api/?name=${activeChat.name || 'Chat'}&background=6366f1&color=ffffff&rounded=true&bold=true`}
+                        alt={activeChat.name || 'Chat'}
+                        className="w-10 h-10 rounded-xl object-cover border-2 border-white/50 dark:border-gray-700/50"
+                      />
+                      {activeChat.type === 'DIRECT' && activeChat.members.length > 0 && (
+                        <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full ring-2 ring-white dark:ring-gray-900 ${
+                          activeChat.members[0].user.isOnline ? 'bg-green-500' : 'bg-gray-400'
+                        }`} />
+                      )}
                     </div>
-                  </div>
-                </div>
-              )}
-
-              {activeTab === 'contacts' && (
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      Kişiler
-                    </h2>
-                    <div className="flex space-x-2">
-                      <div className="relative">
-                        <Search className="h-4 w-4 absolute left-3 top-3 text-gray-400" />
-                        <input
-                          type="text"
-                          placeholder="Kişi ara..."
-                          className="pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                        />
-                      </div>
-                      <button className="flex items-center space-x-2 bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">
-                        <Plus className="h-4 w-4" />
-                        <span>Arkadaş Ekle</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="text-center py-12">
-                    <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                      Henüz arkadaş yok
-                    </h3>
-                    <p className="text-gray-500 dark:text-gray-400 mb-4">
-                      Arkadaş ekleyerek sohbet etmeye başlayın
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {activeTab === 'settings' && (
-                <div className="p-6">
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">
-                    Ayarlar
-                  </h2>
-                  
-                  <div className="space-y-6">
-                    <div className="border-b border-gray-200 dark:border-gray-700 pb-4">
-                      <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                        Profil Ayarları
-                      </h3>
-                      <button
-                        onClick={() => navigate('/profile')}
-                        className="text-blue-600 hover:text-blue-700 text-sm"
-                      >
-                        Profili Düzenle
-                      </button>
-                    </div>
-
-                    <div className="border-b border-gray-200 dark:border-gray-700 pb-4">
-                      <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                        Bildirim Ayarları
-                      </h3>
-                      <div className="space-y-2">
-                        <label className="flex items-center">
-                          <input
-                            type="checkbox"
-                            defaultChecked
-                            className="h-4 w-4 text-blue-600 border-gray-300 rounded"
-                          />
-                          <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                            Yeni mesaj bildirimleri
-                          </span>
-                        </label>
-                        <label className="flex items-center">
-                          <input
-                            type="checkbox"
-                            defaultChecked
-                            className="h-4 w-4 text-blue-600 border-gray-300 rounded"
-                          />
-                          <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                            Arkadaş istekleri
-                          </span>
-                        </label>
-                      </div>
-                    </div>
-
                     <div>
-                      <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                        Hesap
-                      </h3>
-                      <button
-                        onClick={handleLogout}
-                        className="text-red-600 hover:text-red-700 text-sm"
-                      >
-                        Çıkış Yap
-                      </button>
+                      <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
+                        {activeChat.name || 
+                         (activeChat.type === 'DIRECT' && activeChat.members.length > 0
+                           ? `${activeChat.members[0].user.firstName} ${activeChat.members[0].user.lastName}`
+                           : 'Unnamed Chat')}
+                      </h1>
+                      {activeChat.type === 'DIRECT' && activeChat.members.length > 0 && (
+                        <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center space-x-1">
+                          <div className={`w-2 h-2 rounded-full ${
+                            activeChat.members[0].user.isOnline ? 'bg-green-500' : 'bg-gray-400'
+                          }`} />
+                          <span>
+                            {activeChat.members[0].user.isOnline ? 'Online' : 'Last seen recently'}
+                          </span>
+                        </p>
+                      )}
                     </div>
                   </div>
+                )}
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                {/* Search */}
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Search messages..."
+                    className="pl-10 pr-4 py-2 w-64 bg-white/50 dark:bg-gray-800/50 border border-white/20 dark:border-gray-700/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/30 backdrop-blur-sm text-sm"
+                  />
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                 </div>
-              )}
-
+                
+                {/* Quick Actions */}
+                <button className="p-2 rounded-xl bg-white/50 dark:bg-gray-800/50 border border-white/20 dark:border-gray-700/20 hover:bg-white/70 dark:hover:bg-gray-800/70 transition-all duration-300 hover:scale-105">
+                  <Zap className="w-5 h-5 text-orange-500" />
+                </button>
+                
+                <button className="p-2 rounded-xl bg-white/50 dark:bg-gray-800/50 border border-white/20 dark:border-gray-700/20 hover:bg-white/70 dark:hover:bg-gray-800/70 transition-all duration-300 hover:scale-105">
+                  <Settings className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+                </button>
+              </div>
             </div>
+          </header>
+
+          {/* Chat Content */}
+          <div className="flex-1 relative">
+            {activeChat ? (
+              <ChatArea chat={activeChat} />
+            ) : (
+              <WelcomeScreen />
+            )}
           </div>
         </div>
       </div>

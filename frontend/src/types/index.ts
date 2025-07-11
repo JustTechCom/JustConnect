@@ -1,3 +1,4 @@
+// frontend/src/types/index.ts - Complete Type Definitions
 export interface User {
   id: string;
   email: string;
@@ -10,6 +11,10 @@ export interface User {
   lastSeen: Date;
   createdAt: Date;
   updatedAt: Date;
+  isVerified?: boolean;
+  isPremium?: boolean;
+  isBestFriend?: boolean;
+  mutualFriends?: number;
 }
 
 export interface Message {
@@ -32,6 +37,7 @@ export interface Message {
     avatar?: string;
   };
   replyToMessage?: Message;
+  isOwn?: boolean;
 }
 
 export interface Chat {
@@ -43,10 +49,15 @@ export interface Chat {
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
-  lastMessage?: string;
+  lastMessage?: string | Message;
   lastMessageAt?: Date;
   members: ChatMember[];
   messageCount: number;
+  unreadCount?: number;
+  isPinned?: boolean;
+  isMuted?: boolean;
+  isVerified?: boolean;
+  isTyping?: boolean;
 }
 
 export interface ChatMember {
@@ -181,6 +192,7 @@ export interface MessageItemProps {
   message: Message;
   isOwn: boolean;
   showAvatar: boolean;
+  showTime: boolean;
   onReply?: (message: Message) => void;
   onEdit?: (message: Message) => void;
   onDelete?: (messageId: string) => void;
@@ -231,4 +243,27 @@ export interface SettingsFormData {
     fontSize: 'small' | 'medium' | 'large';
     language: string;
   };
+}
+
+// Friendship types
+export interface FriendRequest {
+  id: string;
+  senderId: string;
+  receiverId: string;
+  status: 'PENDING' | 'ACCEPTED' | 'REJECTED';
+  createdAt: Date;
+  updatedAt: Date;
+  sender: User;
+  receiver: User;
+}
+
+export interface Friendship {
+  id: string;
+  userId1: string;
+  userId2: string;
+  status: 'ACTIVE' | 'BLOCKED';
+  createdAt: Date;
+  updatedAt: Date;
+  user1: User;
+  user2: User;
 }

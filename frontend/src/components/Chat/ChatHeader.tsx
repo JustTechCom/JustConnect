@@ -1,296 +1,247 @@
-import React, { useState } from 'react';
+// frontend/src/components/Chat/ChatHeader.tsx - Chat Header Component
+import React from 'react';
 import { Chat } from '../../types';
-import { useSelector } from 'react-redux';
-import { RootState } from '../../store';
 import { 
   Phone, 
   Video, 
-  MoreVertical, 
-  Search, 
-  Users, 
-  Info,
-  Volume2,
-  VolumeX,
-  Pin,
-  Archive,
-  Trash2,
-  Settings
+  Info, 
+  Search,
+  MoreVertical,
+  Users,
+  Crown,
+  Shield,
+  Star,
+  Clock
 } from 'lucide-react';
 
 interface ChatHeaderProps {
   chat: Chat;
+  onVoiceCall?: () => void;
+  onVideoCall?: () => void;
+  onToggleInfo?: () => void;
+  onToggleSearch?: () => void;
+  showInfo?: boolean;
+  showSearch?: boolean;
 }
 
-const ChatHeader: React.FC<ChatHeaderProps> = ({ chat }) => {
-  // SAFE SELECTORS with fallbacks
-  const chatsState = useSelector((state: RootState) => state.chats);
-  const onlineUsers = chatsState?.onlineUsers || chatsState?.activeUsers || new Set<string>();
-  const typingUsers = chatsState?.typingUsers || {};
-  
-  const [showMenu, setShowMenu] = useState(false);
-  const [showChatInfo, setShowChatInfo] = useState(false);
-
-  const isTyping = typingUsers[chat.id]?.length > 0;
-
+const ChatHeader: React.FC<ChatHeaderProps> = ({
+  chat,
+  onVoiceCall,
+  onVideoCall,
+  onToggleInfo,
+  onToggleSearch,
+  showInfo = false,
+  showSearch = false,
+}) => {
   const getChatName = () => {
-    if (chat.name) return chat.name;
-    
-    if (chat.type === 'DIRECT' && chat.members && chat.members.length > 0) {
+    if (chat.type === 'DIRECT' && chat.members.length > 0) {
       const otherMember = chat.members[0];
       return `${otherMember.user.firstName} ${otherMember.user.lastName}`;
     }
-    
-    return 'Unnamed Chat';
+    return chat.name || 'Unnamed Chat';
   };
 
   const getChatAvatar = () => {
     if (chat.avatar) return chat.avatar;
     
-    if (chat.type === 'DIRECT' && chat.members && chat.members.length > 0) {
-      return chat.members[0].user.avatar || '/default-avatar.png';
+    if (chat.type === 'DIRECT' && chat.members.length > 0) {
+      const otherMember = chat.members[0];
+      return otherMember.user.avatar || 
+        `https://ui-avatars.com/api/?name=${otherMember.user.firstName}+${otherMember.user.lastName}&background=6366f1&color=ffffff&rounded=true&bold=true`;
     }
     
-    return '/default-group-avatar.png';
+    return `https://ui-avatars.com/api/?name=${chat.name || 'Chat'}&background=6366f1&color=ffffff&rounded=true&bold=true`;
+  };
+
+  const getOnlineStatus = () => {
+    if (chat.type === 'DIRECT' && chat.members.length > 0) {
+      return chat.members[0].user.isOnline;
+    }
+    return false;
   };
 
   const getStatusText = () => {
-    if (isTyping) {
-      const typingUsernames = typingUsers[chat.id]
-        ?.map(userId => {
-          const member = chat.members && chat.members.find(m => m.user.id === userId);
-          return member?.user.firstName || 'Someone';
-        })
-        .join(', ');
-      return `${typingUsernames} yazıyor...`;
+    if (chat.type === 'DIRECT' && chat.members.length > 0) {
+      const member = chat.members[0].user;
+      if (member.isOnline) return 'Online';
+      
+      const lastSeen = new Date(member.lastSeen);
+      const now = new Date();
+      const diffInMinutes = Math.floor((now.getTime() - lastSeen.getTime()) / (1000 * 60));
+      
+      if (diffInMinutes < 1) return 'Just now';
+      if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+      if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
+      return lastSeen.toLocaleDateString();
     }
-
-    if (chat.type === 'DIRECT' && chat.members && chat.members.length > 0) {
-      const otherMember = chat.members[0];
-      return onlineUsers.has(otherMember.user.id) ? 'Çevrimiçi' : 'Çevrimdışı';
+    
+    if (chat.type === 'GROUP') {
+      const onlineCount = chat.members.filter(m => m.user.isOnline).length;
+      return `${chat.members.length} members, ${onlineCount} online`;
     }
-
-    if (chat.type === 'GROUP' && chat.members) {
-      const onlineMembersCount = chat.members.filter(member => 
-        onlineUsers.has(member.user.id)
-      ).length;
-      return `${chat.members.length} üye, ${onlineMembersCount} çevrimiçi`;
+    
+    if (chat.type === 'CHANNEL') {
+      return `${chat.members.length} subscribers`;
     }
-
+    
     return '';
   };
 
-  const isOnline = chat.type === 'DIRECT' && chat.members && chat.members.length > 0 
-    ? onlineUsers.has(chat.members[0].user.id)
-    : false;
-
   return (
-    <>
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3">
-        <div className="flex items-center justify-between">
-          {/* Chat Info */}
-          <div 
-            className="flex items-center space-x-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg p-2 -m-2 transition-colors"
-            onClick={() => setShowChatInfo(true)}
-          >
-            <div className="relative flex-shrink-0">
-              <img
-                src={getChatAvatar()}
-                alt={getChatName()}
-                className="w-10 h-10 rounded-full object-cover"
-              />
-              
-              {/* Online indicator for direct chats */}
-              {chat.type === 'DIRECT' && isOnline && (
-                <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full ring-2 ring-white dark:ring-gray-800"></div>
-              )}
-              
-              {/* Group indicator */}
-              {chat.type === 'GROUP' && (
-                <div className="absolute bottom-0 right-0 w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center">
-                  <Users className="w-2 h-2 text-white" />
-                </div>
-              )}
-            </div>
-
-            <div className="min-w-0 flex-1">
-              <h2 className="font-semibold text-gray-900 dark:text-white truncate">
+    <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl border-b border-white/20 dark:border-gray-700/20 px-6 py-4">
+      <div className="flex items-center justify-between">
+        {/* Chat Info */}
+        <div className="flex items-center space-x-4 flex-1 min-w-0">
+          <div className="relative">
+            <img
+              src={getChatAvatar()}
+              alt={getChatName()}
+              className="w-12 h-12 rounded-xl object-cover border-2 border-white/50 dark:border-gray-700/50 shadow-lg"
+            />
+            
+            {/* Online indicator for direct chats */}
+            {chat.type === 'DIRECT' && (
+              <div className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-white dark:border-gray-800 ${
+                getOnlineStatus() ? 'bg-green-500' : 'bg-gray-400'
+              }`} />
+            )}
+            
+            {/* Group indicator */}
+            {chat.type === 'GROUP' && (
+              <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-blue-500 rounded-full border-2 border-white dark:border-gray-800 flex items-center justify-center">
+                <Users className="w-2 h-2 text-white" />
+              </div>
+            )}
+            
+            {/* Channel indicator */}
+            {chat.type === 'CHANNEL' && (
+              <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-purple-500 rounded-full border-2 border-white dark:border-gray-800 flex items-center justify-center">
+                <Crown className="w-2 h-2 text-white" />
+              </div>
+            )}
+          </div>
+          
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center space-x-2">
+              <h1 className="text-lg font-semibold text-gray-900 dark:text-white truncate">
                 {getChatName()}
-              </h2>
+              </h1>
               
-              <p className={`text-sm truncate ${
-                isTyping 
-                  ? 'text-blue-500 dark:text-blue-400 italic' 
-                  : isOnline
-                    ? 'text-green-600 dark:text-green-400'
-                    : 'text-gray-500 dark:text-gray-400'
-              }`}>
+              {/* Badges */}
+              <div className="flex items-center space-x-1">
+                {chat.isVerified && (
+                  <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+                    <Shield className="w-3 h-3 text-white" />
+                  </div>
+                )}
+                
+                {chat.isPinned && (
+                  <Star className="w-4 h-4 text-yellow-500" />
+                )}
+              </div>
+            </div>
+            
+            {/* Status */}
+            <div className="flex items-center space-x-2">
+              {getOnlineStatus() && (
+                <div className="w-2 h-2 bg-green-500 rounded-full" />
+              )}
+              <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
                 {getStatusText()}
               </p>
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex items-center space-x-2">
-            {/* Voice Call */}
-            {chat.type === 'DIRECT' && (
-              <button className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors">
-                <Phone className="w-5 h-5" />
-              </button>
-            )}
-
-            {/* Video Call */}
-            {chat.type === 'DIRECT' && (
-              <button className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors">
-                <Video className="w-5 h-5" />
-              </button>
-            )}
-
-            {/* Search */}
-            <button className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors">
-              <Search className="w-5 h-5" />
-            </button>
-
-            {/* More Options */}
-            <div className="relative">
-              <button 
-                onClick={() => setShowMenu(!showMenu)}
-                className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors"
-              >
-                <MoreVertical className="w-5 h-5" />
-              </button>
-
-              {/* Dropdown Menu */}
-              {showMenu && (
-                <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 py-2 z-50">
-                  <button 
-                    onClick={() => {
-                      setShowChatInfo(true);
-                      setShowMenu(false);
-                    }}
-                    className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center space-x-2 text-gray-700 dark:text-gray-300"
-                  >
-                    <Info className="w-4 h-4" />
-                    <span>Sohbet Bilgileri</span>
-                  </button>
-                  
-                  <button className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center space-x-2 text-gray-700 dark:text-gray-300">
-                    <Pin className="w-4 h-4" />
-                    <span>Sabitle</span>
-                  </button>
-                  
-                  <button className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center space-x-2 text-gray-700 dark:text-gray-300">
-                    <VolumeX className="w-4 h-4" />
-                    <span>Sessiz</span>
-                  </button>
-                  
-                  <button className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center space-x-2 text-gray-700 dark:text-gray-300">
-                    <Archive className="w-4 h-4" />
-                    <span>Arşivle</span>
-                  </button>
-                  
-                  {chat.type === 'GROUP' && (
-                    <button className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center space-x-2 text-gray-700 dark:text-gray-300">
-                      <Settings className="w-4 h-4" />
-                      <span>Grup Ayarları</span>
-                    </button>
-                  )}
-                  
-                  <div className="border-t border-gray-200 dark:border-gray-600 mt-2 pt-2">
-                    <button className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center space-x-2 text-red-600 dark:text-red-400">
-                      <Trash2 className="w-4 h-4" />
-                      <span>Sohbeti Sil</span>
-                    </button>
+              
+              {/* Typing indicator */}
+              {chat.isTyping && (
+                <div className="flex items-center space-x-1 text-blue-500">
+                  <div className="flex space-x-0.5">
+                    <div className="w-1 h-1 bg-blue-500 rounded-full animate-bounce" />
+                    <div className="w-1 h-1 bg-blue-500 rounded-full animate-bounce animation-delay-100" />
+                    <div className="w-1 h-1 bg-blue-500 rounded-full animate-bounce animation-delay-200" />
                   </div>
+                  <span className="text-xs">typing...</span>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex items-center space-x-2">
+          {/* Voice/Video Call Buttons (only for direct chats) */}
+          {chat.type === 'DIRECT' && (
+            <>
+              <button 
+                onClick={onVoiceCall}
+                className="p-2.5 rounded-xl bg-white/50 dark:bg-gray-700/50 border border-white/20 dark:border-gray-600/20 hover:bg-white/70 dark:hover:bg-gray-700/70 transition-all duration-300 hover:scale-105 text-green-600"
+                title="Voice Call"
+              >
+                <Phone className="w-5 h-5" />
+              </button>
+              
+              <button 
+                onClick={onVideoCall}
+                className="p-2.5 rounded-xl bg-white/50 dark:bg-gray-700/50 border border-white/20 dark:border-gray-600/20 hover:bg-white/70 dark:hover:bg-gray-700/70 transition-all duration-300 hover:scale-105 text-blue-600"
+                title="Video Call"
+              >
+                <Video className="w-5 h-5" />
+              </button>
+            </>
+          )}
+          
+          {/* Search Messages */}
+          <button 
+            onClick={onToggleSearch}
+            className={`p-2.5 rounded-xl border border-white/20 dark:border-gray-600/20 transition-all duration-300 hover:scale-105 ${
+              showSearch 
+                ? 'bg-blue-500 text-white shadow-lg' 
+                : 'bg-white/50 dark:bg-gray-700/50 hover:bg-white/70 dark:hover:bg-gray-700/70 text-gray-600 dark:text-gray-300'
+            }`}
+            title="Search Messages"
+          >
+            <Search className="w-5 h-5" />
+          </button>
+          
+          {/* Chat Info */}
+          <button 
+            onClick={onToggleInfo}
+            className={`p-2.5 rounded-xl border border-white/20 dark:border-gray-600/20 transition-all duration-300 hover:scale-105 ${
+              showInfo 
+                ? 'bg-purple-500 text-white shadow-lg' 
+                : 'bg-white/50 dark:bg-gray-700/50 hover:bg-white/70 dark:hover:bg-gray-700/70 text-gray-600 dark:text-gray-300'
+            }`}
+            title="Chat Info"
+          >
+            <Info className="w-5 h-5" />
+          </button>
+          
+          {/* More Options */}
+          <div className="relative group">
+            <button className="p-2.5 rounded-xl bg-white/50 dark:bg-gray-700/50 border border-white/20 dark:border-gray-600/20 hover:bg-white/70 dark:hover:bg-gray-700/70 transition-all duration-300 hover:scale-105 text-gray-600 dark:text-gray-300">
+              <MoreVertical className="w-5 h-5" />
+            </button>
+            
+            {/* Dropdown Menu */}
+            <div className="absolute right-0 top-full mt-2 w-56 bg-white/95 dark:bg-gray-800/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/20 dark:border-gray-700/20 py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+              <div className="px-4 py-2 border-b border-gray-200/50 dark:border-gray-700/50">
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  Chat Options
+                </p>
+              </div>
+              
+              <button className="w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100/60 dark:hover:bg-gray-700/60 flex items-center space-x-3">
+                <Star className="w-4 h-4" />
+                <span>Pin Chat</span>
+              </button>
+              
+              <button className="w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100/60 dark:hover:bg-gray-700/60 flex items-center space-x-3">
+                <Clock className="w-4 h-4" />
+                <span>Clear History</span>
+              </button>
             </div>
           </div>
         </div>
       </div>
-
-      {/* Chat Info Modal */}
-      {showChatInfo && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4 max-h-96 overflow-y-auto">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Sohbet Bilgileri
-              </h3>
-              <button
-                onClick={() => setShowChatInfo(false)}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Modal Content */}
-            <div className="p-4">
-              <div className="text-center mb-6">
-                <img
-                  src={getChatAvatar()}
-                  alt={getChatName()}
-                  className="w-20 h-20 rounded-full mx-auto mb-4"
-                />
-                <h4 className="text-xl font-semibold text-gray-900 dark:text-white">
-                  {getChatName()}
-                </h4>
-                <p className="text-gray-500 dark:text-gray-400">
-                  {getStatusText()}
-                </p>
-              </div>
-
-              {/* Chat Members */}
-              {chat.type === 'GROUP' && chat.members && (
-                <div>
-                  <h5 className="font-medium text-gray-900 dark:text-white mb-3">
-                    Üyeler ({chat.members.length})
-                  </h5>
-                  <div className="space-y-2">
-                    {chat.members.map((member) => (
-                      <div key={member.id} className="flex items-center space-x-3">
-                        <div className="relative">
-                          <img
-                            src={member.user.avatar || '/default-avatar.png'}
-                            alt={member.user.firstName}
-                            className="w-8 h-8 rounded-full"
-                          />
-                          {onlineUsers.has(member.user.id) && (
-                            <div className="absolute bottom-0 right-0 w-2 h-2 bg-green-500 rounded-full"></div>
-                          )}
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-gray-900 dark:text-white">
-                            {member.user.firstName} {member.user.lastName}
-                          </p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            @{member.user.username}
-                          </p>
-                        </div>
-                        {member.role === 'ADMIN' && (
-                          <span className="text-xs bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200 px-2 py-1 rounded">
-                            Admin
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Click outside to close menu */}
-      {showMenu && (
-        <div
-          className="fixed inset-0 z-40"
-          onClick={() => setShowMenu(false)}
-        />
-      )}
-    </>
+    </div>
   );
 };
 
