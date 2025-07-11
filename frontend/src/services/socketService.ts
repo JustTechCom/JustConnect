@@ -1,4 +1,4 @@
-// frontend/src/services/socketService.ts - Fixed WebSocket connection
+// frontend/src/services/socketService.ts - Improved connection handling
 import { io, Socket } from 'socket.io-client';
 import { store } from '../store';
 import { 
@@ -37,368 +37,280 @@ class SocketService {
   private connectionCallbacks: Array<() => void> = [];
   private typingTimeouts: Map<string, NodeJS.Timeout> = new Map();
 
-  // Enhanced URL detection with better fallbacks
-  private getSocketUrl(): string {
-    // Check environment variables first
-    if (process.env.REACT_APP_SOCKET_URL) {
-      console.log('🔧 Using REACT_APP_SOCKET_URL:', process.env.REACT_APP_SOCKET_URL);
-      return process.env.REACT_APP_SOCKET_URL;
-    }
-
-    // Production URL detection
-    if (window.location.hostname.includes('justconnect-ui.onrender.com')) {
-      const prodUrl = 'https://justconnect-o8k8.onrender.com';
-      console.log('🔧 Using production URL:', prodUrl);
-      return prodUrl;
-    }
-
-    // Development fallback
-    const devUrl = 'http://localhost:5000';
-    console.log('🔧 Using development URL:', devUrl);
-    return devUrl;
-  }
-
- // frontend/src/services/socketService.ts - Render için güncellenmiş connect fonksiyonu
-
   connect(token: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (this.socket?.connected) {
-      resolve();
-      return;
-    }
+    return new Promise((resolve, reject) => {
+      if (this.socket?.connected) {
+        resolve();
+        return;
+      }
 
-    if (this.isConnecting) {
-      this.connectionCallbacks.push(resolve);
-      return;
-    }
+      if (this.isConnecting) {
+        this.connectionCallbacks.push(resolve);
+        return;
+      }
 
-    this.isConnecting = true;
-    const serverUrl = process.env.REACT_APP_SOCKET_URL || 'https://justconnect-o8k8.onrender.com';
-
-    console.log('🔧 Connecting to server:', serverUrl);
-
-    // Render için özel ayarlar
-    this.socket = io(serverUrl, {
-      auth: { token },
-      // Render için kritik: Polling önce!
-      transports: ['polling', 'websocket'],
-      upgrade: true,
-      rememberUpgrade: false, // Render'da false olmalı
-      timeout: 45000, // Render için daha uzun timeout
-      forceNew: true,
-      // Render specific ayarları
-      path: '/socket.io',
-      autoConnect: true,
-      randomizationFactor: 0.5,
-      reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      maxReconnectionAttempts: 5,
-      // Engine.io ayarları
-      closeOnBeforeunload: true
-    });
-
-    this.setupEventListeners();
-
-    this.socket.on('connect', () => {
-      console.log('🔌 Connected to server successfully');
-      console.log('🚀 Transport:', this.socket?.io.engine.transport.name);
+      this.isConnecting = true;
       
-      this.isConnecting = false;
-      this.reconnectAttempts = 0;
+      // Use environment variable or fallback
+      const serverUrl = process.env.REACT_APP_SOCKET_URL || 'https://justconnect-o8k8.onrender.com';
       
-      // Join user's chats
-      this.socket?.emit('join_chats');
-      
-      // Notify success
-      store.dispatch(addNotification({
-        type: 'success',
-        title: 'Bağlandı',
-        message: 'JustConnect sunucusuna başarıyla bağlandı',
-      }));
+      console.log('🔌 Connecting to socket server:', serverUrl);
 
-      // Execute callbacks
-      this.connectionCallbacks.forEach(callback => callback());
-      this.connectionCallbacks = [];
-      
-      resolve();
-    });
+      this.socket = io(serverUrl, {
+        auth: { token },
+        transports: ['websocket', 'polling'],
+        upgrade: true,
+        rememberUpgrade: false, // Don't remember upgrades for better compatibility
+        timeout: 60000, // 60 second timeout
+        forceNew: false,
+        autoConnect: true,
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        maxReconnectionAttempts: 5,
+        // Add additional options for Render.com
+        withCredentials: true,
+        extraHeaders: {
+          'Origin': window.location.origin
+        }
+      });
 
-    this.socket.on('connect_error', (error) => {
-      console.error('🔌 Connection error:', error);
-      console.log('🔧 Trying different transport...');
-      
-      this.isConnecting = false;
-      
-      // Render için özel retry mantığı
-      if (this.reconnectAttempts < this.maxReconnectAttempts) {
-        this.handleReconnect();
-      } else {
-        console.error('❌ Max reconnection attempts reached');
+      this.setupEventListeners();
+
+      this.socket.on('connect', () => {
+        console.log('🔌 Connected to server successfully');
+        this.isConnecting = false;
+        this.reconnectAttempts = 0;
+        
+        // Join user's chats
+        this.socket?.emit('join_chats');
+        
+        // Notify success
+        store.dispatch(addNotification({
+          type: 'success',
+          title: 'Connected',
+          message: 'Connected to JustConnect server',
+        }));
+
+        // Execute callbacks
+        this.connectionCallbacks.forEach(callback => callback());
+        this.connectionCallbacks = [];
+        
+        resolve();
+      });
+
+      this.socket.on('connect_error', (error) => {
+        console.error('🔌 Connection error:', error);
+        this.isConnecting = false;
+        
+        // Show user-friendly error
         store.dispatch(addNotification({
           type: 'error',
-          title: 'Bağlantı Hatası',
-          message: 'Sunucuya bağlanılamadı. Sayfayı yenilemeyi deneyin.',
+          title: 'Connection Failed',
+          message: 'Unable to connect to server. Please check your internet connection.',
         }));
-        reject(error);
-      }
-    });
-
-    // Transport upgrade monitoring
-    this.socket.on('upgrade', () => {
-      console.log('⬆️ Upgraded to:', this.socket?.io.engine.transport.name);
-    });
-
-    this.socket.on('upgradeError', (error) => {
-      console.log('❌ Upgrade failed:', error);
-    });
-  });
-  }
-
-  
-
-  private handleReconnect(): void {
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.log('❌ Max reconnection attempts reached');
-      return;
-    }
-
-    this.reconnectAttempts++;
-    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
-
-    console.log(`🔄 Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts}) in ${delay}ms`);
-
-    setTimeout(() => {
-      if (this.socket && !this.socket.connected) {
-        console.log('🔌 Attempting reconnection...');
-        this.socket.connect();
-      }
-    }, delay);
-  }
-
-disconnect(): void {
-  if (this.socket) {
-    // Event listener'ları temizle
-    this.socket.removeAllListeners();
-    this.socket.disconnect();
-    this.socket = null;
-  }
-  this.clearAllTypingTimeouts();
-  this.connectionCallbacks = [];
-  this.isConnecting = false;
-  this.reconnectAttempts = 0;
-}
-
-  
-  // Test connection method
-  async testConnection(): Promise<boolean> {
-    try {
-      const serverUrl = this.getSocketUrl();
-      console.log('🧪 Testing connection to:', serverUrl);
-      
-      // Test HTTP endpoint first
-      const response = await fetch(`${serverUrl}/health`);
-      if (response.ok) {
-        console.log('✅ HTTP health check passed');
-        return true;
-      } else {
-        console.error('❌ HTTP health check failed:', response.status);
-        return false;
-      }
-    } catch (error) {
-      console.error('❌ Connection test failed:', error);
-      return false;
-    }
-  }
-
-private setupEventListeners(): void {
-  if (!this.socket) return;
-
-  // Önce eski listener'ları temizle
-  this.socket.removeAllListeners();
-
-  // Connection events
-  this.socket.on('disconnect', (reason) => {
-    console.log('🔌 Disconnected from server:', reason);
-    
-    if (reason === 'io server disconnect') {
-      this.handleReconnect();
-    }
-  });
-
-  this.socket.on('connected', (data) => {
-    console.log('✅ Connected successfully:', data);
-  });
-
-  // Chat events
-  this.socket.on('chats_joined', (data) => {
-    console.log('📱 Joined chats:', data);
-  });
-
-  // Message events - sadece bir kez ekle
-  this.socket.off('new_message'); // Önce kaldır
-  this.socket.on('new_message', (message: Message) => {
-    console.log('📨 New message received:', message);
-    
-    store.dispatch(addMessage(message));
-    store.dispatch(updateChatLastMessage({
-      chatId: message.chatId,
-      message: message.content,
-      timestamp: message.createdAt.toString(),
-      senderId: message.senderId
-    }));
-
-    // Notification logic...
-    const state = store.getState();
-    const currentUserId = state.auth.user?.id;
-    const activeChat = state.chats.activeChat;
-    
-    if (message.senderId !== currentUserId) {
-      this.playNotificationSound();
-      
-      if (!activeChat || activeChat.id !== message.chatId) {
-        this.showBrowserNotification(
-          `${message.sender.firstName} ${message.sender.lastName}`,
-          message.content,
-          message.sender.avatar
-        );
         
-        store.dispatch(addNotification({
-          type: 'info',
-          title: `${message.sender.firstName} ${message.sender.lastName}`,
-          message: message.content,
-        }));
-      }
+        // Retry connection
+        this.handleReconnect();
+        reject(error);
+      });
 
-      this.markMessageAsDelivered(message.id, message.chatId);
+      // Add timeout for connection attempt
+      setTimeout(() => {
+        if (this.isConnecting) {
+          console.error('🔌 Connection timeout');
+          this.isConnecting = false;
+          reject(new Error('Connection timeout'));
+        }
+      }, 30000); // 30 second timeout
+    });
+  }
+
+  disconnect(): void {
+    if (this.socket) {
+      this.socket.disconnect();
+      this.socket = null;
     }
-  });
+    this.clearAllTypingTimeouts();
+  }
 
-   this.socket.off('message_sent');
-  this.socket.on('message_sent', (data: { tempId?: string; message: Message }) => {
-    console.log('✅ Message sent confirmation:', data);
-    
-    if (data.tempId) {
-      store.dispatch(replaceTempMessage({
-        tempId: data.tempId,
-        realMessage: data.message
+  private setupEventListeners(): void {
+    if (!this.socket) return;
+
+    // Connection events
+    this.socket.on('disconnect', (reason) => {
+      console.log('🔌 Disconnected from server:', reason);
+      
+      store.dispatch(addNotification({
+        type: 'warning',
+        title: 'Disconnected',
+        message: 'Connection lost. Attempting to reconnect...',
       }));
-    }
-  });
+      
+      if (reason === 'io server disconnect') {
+        this.handleReconnect();
+      }
+    });
 
-    // Add all other existing event listeners here...
-    // (keeping the existing implementation for brevity)
-  }
+    this.socket.on('connected', (data) => {
+      console.log('✅ Connected successfully:', data);
+    });
 
-  // Utility methods
-  isConnected(): boolean {
-    const connected = this.socket?.connected || false;
-    console.log('🔍 Socket connected status:', connected);
-    return connected;
-  }
+    this.socket.on('reconnect', (attemptNumber) => {
+      console.log('🔄 Reconnected successfully after', attemptNumber, 'attempts');
+      store.dispatch(addNotification({
+        type: 'success',
+        title: 'Reconnected',
+        message: 'Connection restored successfully',
+      }));
+    });
 
-  getSocket(): Socket | null {
-    return this.socket;
-  }
+    this.socket.on('reconnect_error', (error) => {
+      console.error('🔄 Reconnection error:', error);
+    });
 
-  getConnectionInfo(): any {
-    if (!this.socket) return null;
-    
-    return {
-      connected: this.socket.connected,
-      id: this.socket.id,
-      transport: this.socket.io.engine?.transport?.name,
-      ping: this.socket.io.engine?.ping,
-      readyState: this.socket.io.engine?.readyState,
-      upgraded: this.socket.io.engine?.upgraded,
-    };
-  }
-
-  // Public methods for emitting events
-  sendMessage(data: {
-    chatId: string;
-    content: string;
-    type?: string;
-    replyTo?: string;
-    tempId?: string;
-  }): void {
-    if (!this.isConnected()) {
-      console.error('❌ Cannot send message: socket not connected');
+    this.socket.on('reconnect_failed', () => {
+      console.error('🔄 Reconnection failed - max attempts reached');
       store.dispatch(addNotification({
         type: 'error',
-        title: 'Connection Error',
-        message: 'Cannot send message. Please check your connection.',
+        title: 'Connection Failed',
+        message: 'Unable to reconnect to server. Please refresh the page.',
       }));
-      return;
-    }
-    
-    console.log('📨 Sending message:', data);
-    this.socket?.emit('send_message', data);
+    });
+
+    // Message events
+    this.socket.on('new_message', (message: Message) => {
+      store.dispatch(addMessage(message));
+      store.dispatch(updateChatLastMessage({
+        chatId: message.chatId,
+        lastMessage: message.content,
+        lastMessageAt: message.createdAt
+      }));
+    });
+
+    this.socket.on('message_delivered', (data: { messageId: string }) => {
+      store.dispatch(updateMessageStatus({
+        messageId: data.messageId,
+        status: 'delivered'
+      }));
+    });
+
+    this.socket.on('message_read', (data: { messageId: string }) => {
+      store.dispatch(updateMessageStatus({
+        messageId: data.messageId,
+        status: 'read'
+      }));
+    });
+
+    // Typing events
+    this.socket.on('user_typing', (data: { chatId: string; user: any }) => {
+      store.dispatch(addUserTyping({ chatId: data.chatId, user: data.user }));
+      
+      // Auto-remove after 3 seconds
+      this.clearTypingTimeout(data.chatId, data.user.id);
+      const timeout = setTimeout(() => {
+        store.dispatch(removeUserTyping({ chatId: data.chatId, userId: data.user.id }));
+      }, 3000);
+      this.typingTimeouts.set(`${data.chatId}-${data.user.id}`, timeout);
+    });
+
+    this.socket.on('user_stopped_typing', (data: { chatId: string; userId: string }) => {
+      store.dispatch(removeUserTyping({ chatId: data.chatId, userId: data.userId }));
+      this.clearTypingTimeout(data.chatId, data.userId);
+    });
+
+    // Online status events
+    this.socket.on('user_online', (data: { userId: string }) => {
+      store.dispatch(addOnlineUser(data.userId));
+    });
+
+    this.socket.on('user_offline', (data: { userId: string }) => {
+      store.dispatch(removeOnlineUser(data.userId));
+    });
+
+    // Chat events
+    this.socket.on('new_chat', (chat: Chat) => {
+      store.dispatch(addNewChat(chat));
+    });
+
+    this.socket.on('chat_updated', (chat: Chat) => {
+      store.dispatch(updateChat(chat));
+    });
+
+    // Member events
+    this.socket.on('member_added', (data: { chatId: string; user: any }) => {
+      store.dispatch(addMember(data));
+    });
+
+    this.socket.on('member_removed', (data: { chatId: string; userId: string }) => {
+      store.dispatch(removeMember(data));
+    });
   }
 
-  startTyping(chatId: string): void {
-    if (this.isConnected()) {
-      this.socket?.emit('typing_start', { chatId });
+  private handleReconnect(): void {
+    if (this.reconnectAttempts < this.maxReconnectAttempts) {
+      this.reconnectAttempts++;
+      const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
+      
+      console.log(`🔄 Attempting reconnection ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${delay}ms`);
+      
+      setTimeout(() => {
+        if (this.socket && !this.socket.connected) {
+          this.socket.connect();
+        }
+      }, delay);
     }
   }
 
-  stopTyping(chatId: string): void {
-    if (this.isConnected()) {
-      this.socket?.emit('typing_stop', { chatId });
-    }
-  }
-
-  markMessageAsDelivered(messageId: string, chatId: string): void {
-    if (this.isConnected()) {
-      this.socket?.emit('message_delivered', { messageId, chatId });
-    }
-  }
-
-  markMessageAsRead(messageId: string, chatId: string): void {
-    if (this.isConnected()) {
-      this.socket?.emit('message_read', { messageId, chatId });
-    }
-  }
-
-  joinChat(chatId: string): void {
-    if (this.isConnected()) {
-      this.socket?.emit('join_chat', { chatId });
-    }
-  }
-
-  leaveChat(chatId: string): void {
-    if (this.isConnected()) {
-      this.socket?.emit('leave_chat', { chatId });
-    }
-  }
-
-  // Helper methods
-  private playNotificationSound(): void {
-    try {
-      const audio = new Audio('/sounds/notification.mp3');
-      audio.volume = 0.5;
-      audio.play().catch(() => {
-        console.warn('Could not play notification sound');
-      });
-    } catch (error) {
-      console.warn('Could not play notification sound');
-    }
-  }
-
-  private showBrowserNotification(title: string, body: string, icon?: string): void {
-    if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification(title, {
-        body,
-        icon: icon || '/favicon.ico',
-        tag: 'justconnect-message',
-        renotify: false
-      });
+  private clearTypingTimeout(chatId: string, userId: string): void {
+    const key = `${chatId}-${userId}`;
+    const timeout = this.typingTimeouts.get(key);
+    if (timeout) {
+      clearTimeout(timeout);
+      this.typingTimeouts.delete(key);
     }
   }
 
   private clearAllTypingTimeouts(): void {
-    this.typingTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
+    this.typingTimeouts.forEach(timeout => clearTimeout(timeout));
     this.typingTimeouts.clear();
+  }
+
+  // Public methods for sending events
+  public sendMessage(message: any): void {
+    if (this.socket?.connected) {
+      this.socket.emit('send_message', message);
+    }
+  }
+
+  public startTyping(chatId: string): void {
+    if (this.socket?.connected) {
+      this.socket.emit('typing_start', { chatId });
+    }
+  }
+
+  public stopTyping(chatId: string): void {
+    if (this.socket?.connected) {
+      this.socket.emit('typing_stop', { chatId });
+    }
+  }
+
+  public markMessagesAsRead(chatId: string): void {
+    if (this.socket?.connected) {
+      this.socket.emit('mark_messages_read', { chatId });
+    }
+  }
+
+  public isConnected(): boolean {
+    return this.socket?.connected || false;
+  }
+
+  public onConnection(callback: () => void): void {
+    if (this.socket?.connected) {
+      callback();
+    } else {
+      this.connectionCallbacks.push(callback);
+    }
   }
 }
 
