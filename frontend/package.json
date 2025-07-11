@@ -8,6 +8,7 @@
     "react-dom": "^18.2.0",
     "react-scripts": "5.0.1",
     "typescript": "^4.9.5",
+    "redux-persist": "^6.0.0",
     "@types/react": "^18.2.45",
     "@types/react-dom": "^18.2.18",
     "socket.io-client": "^4.7.4",
